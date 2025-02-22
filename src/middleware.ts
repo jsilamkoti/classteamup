@@ -8,16 +8,33 @@ export async function middleware(req: NextRequest) {
 
   const {
     data: { session },
+    error: sessionError,
   } = await supabase.auth.getSession()
+
+  // Handle session errors
+  if (sessionError) {
+    console.error('Session error in middleware:', sessionError)
+    return NextResponse.redirect(new URL('/auth/signin', req.url))
+  }
 
   // If no session and trying to access protected route
   if (!session && req.nextUrl.pathname.startsWith('/dashboard')) {
-    return NextResponse.redirect(new URL('/auth/signin', req.url))
+    const redirectUrl = new URL('/auth/signin', req.url)
+    return NextResponse.redirect(redirectUrl)
+  }
+
+  // If session exists and trying to access auth routes
+  if (session && (req.nextUrl.pathname.startsWith('/auth'))) {
+    const redirectUrl = new URL('/dashboard', req.url)
+    return NextResponse.redirect(redirectUrl)
   }
 
   return res
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*']
+  matcher: [
+    '/dashboard/:path*',
+    '/auth/:path*',
+  ]
 } 
