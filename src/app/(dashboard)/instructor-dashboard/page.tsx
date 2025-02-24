@@ -9,21 +9,26 @@ export const dynamic = 'force-dynamic'
 export default async function InstructorDashboard() {
   const supabase = createServerComponentClient({ cookies })
 
-  // Fetch statistics
+  // Fetch statistics with proper filters
   const { count: totalStudents } = await supabase
     .from('users')
     .select('id', { count: 'exact', head: true })
     .eq('role', 'student')
-
-  const { count: totalTeams } = await supabase
-    .from('teams')
-    .select('id', { count: 'exact', head: true })
 
   const { count: unassignedStudents } = await supabase
     .from('users')
     .select('id', { count: 'exact', head: true })
     .eq('role', 'student')
     .eq('looking_for_team', true)
+    .not('id', 'in', (
+      supabase
+        .from('team_members')
+        .select('user_id')
+    ))
+
+  const { count: totalTeams } = await supabase
+    .from('teams')
+    .select('id', { count: 'exact', head: true })
 
   const stats = [
     {
@@ -34,18 +39,18 @@ export default async function InstructorDashboard() {
       bgColor: 'bg-blue-100'
     },
     {
-      name: 'Active Teams',
-      value: totalTeams || 0,
-      icon: BookOpen,
-      color: 'text-green-600',
-      bgColor: 'bg-green-100'
-    },
-    {
       name: 'Unassigned Students',
       value: unassignedStudents || 0,
       icon: UserCheck,
       color: 'text-purple-600',
       bgColor: 'bg-purple-100'
+    },
+    {
+      name: 'Active Teams',
+      value: totalTeams || 0,
+      icon: BookOpen,
+      color: 'text-green-600',
+      bgColor: 'bg-green-100'
     }
   ]
 

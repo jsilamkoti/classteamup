@@ -4,6 +4,10 @@ import { redirect } from 'next/navigation'
 import { Card } from '@/components/ui/Card'
 import Link from 'next/link'
 import { UserCircle, Users, Search } from 'lucide-react'
+import { createClient } from '@/lib/supabase'
+import { toast } from 'react-hot-toast'
+import FindTeamButton from '@/components/teams/FindTeamButton'
+import TeamAvailabilityCard from '@/components/teams/TeamAvailabilityCard'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,6 +31,8 @@ export default async function StudentDashboard() {
     .select('*')
     .eq('id', session.user.id)
     .single()
+
+  const isLookingForTeam = profile?.looking_for_team || false;
 
   const { data: skills } = await supabase
     .from('student_skills')
@@ -52,6 +58,33 @@ export default async function StudentDashboard() {
   const completedRequirements = requirements.filter(req => req.met).length
   const totalRequirements = requirements.length
   const completionPercentage = (completedRequirements / totalRequirements) * 100
+
+  const handleFindTeam = async () => {
+    try {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      
+      if (!user) {
+        toast.error('Please sign in to continue')
+        return
+      }
+
+      // Update user's availability status
+      const { error } = await supabase
+        .from('users')
+        .update({
+          looking_for_team: true,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.id)
+
+      if (error) throw error
+
+      toast.success('You are now available for team matching!')
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to update availability')
+    }
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -130,19 +163,10 @@ export default async function StudentDashboard() {
         </Link>
 
         {/* Find Team Card */}
-        <Link href="/student-dashboard/teams" className="h-full">
-          <Card className={`p-6 h-full flex flex-col justify-between hover:shadow-md transition-shadow ${
-            completionPercentage < 100 ? 'opacity-50 cursor-not-allowed' : ''
-          }`}>
-            <div className="flex items-center space-x-3 mb-4">
-              <Users className="h-8 w-8 text-green-600" />
-              <h3 className="text-xl font-medium">Find a Team</h3>
-            </div>
-            <p className="text-sm text-gray-600">
-              Browse available teams or find teammates
-            </p>
-          </Card>
-        </Link>
+        <TeamAvailabilityCard 
+          initialLookingForTeam={isLookingForTeam} 
+          isProfileComplete={completionPercentage === 100} 
+        />
 
         {/* Browse Students Card */}
         <Link href="/student-dashboard/students" className="h-full">
