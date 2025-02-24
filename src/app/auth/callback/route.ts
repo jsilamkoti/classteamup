@@ -9,7 +9,25 @@ export async function GET(request: Request) {
   if (code) {
     const supabase = createRouteHandlerClient({ cookies })
     await supabase.auth.exchangeCodeForSession(code)
+    
+    // Get user role
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      const { data: userData } = await supabase
+        .from('users')
+        .select('role')
+        .eq('id', user.id)
+        .single()
+
+      // Redirect based on role
+      if (userData?.role === 'instructor') {
+        return NextResponse.redirect(new URL('/instructor-dashboard', requestUrl.origin))
+      } else {
+        return NextResponse.redirect(new URL('/student-dashboard', requestUrl.origin))
+      }
+    }
   }
 
-  return NextResponse.redirect(`${requestUrl.origin}/dashboard`)
+  // Fallback redirect
+  return NextResponse.redirect(new URL('/auth/signin', requestUrl.origin))
 } 
