@@ -23,7 +23,7 @@ export default function TeamFormation() {
     // Initial load
     loadAvailableStudents()
 
-    // Set up real-time subscription for user changes
+    // Real-time subscription for user changes
     const channel = supabase
       .channel('available-students')
       .on(
@@ -31,12 +31,10 @@ export default function TeamFormation() {
         {
           event: '*',
           schema: 'public',
-          table: 'users',
-          filter: 'looking_for_team=eq.true'
+          table: 'users'
         },
-        (payload) => {
-          console.log('Change received:', payload)
-          loadAvailableStudents() // Reload count when changes occur
+        () => {
+          loadAvailableStudents() // Reload count on any user changes
         }
       )
       .subscribe()
@@ -48,23 +46,27 @@ export default function TeamFormation() {
 
   const loadAvailableStudents = async () => {
     try {
-      // Get students who are looking for teams and not in any team
-      const { data, error } = await supabase
+      // Count students who are:
+      // 1. Students (role)
+      // 2. Looking for team (flag)
+      // 3. Not already in a team
+      const { data, count, error } = await supabase
         .from('users')
-        .select('id, looking_for_team')
+        .select('*', { count: 'exact' })
         .eq('role', 'student')
         .eq('looking_for_team', true)
 
       if (error) {
-        console.error('Supabase error:', error)
         throw error
       }
 
-      console.log('Available students:', data)
-      setAvailableStudents(data?.length || 0)
-    } catch (error: any) {
-      console.error('Error loading available students:', error.message || error)
-      toast.error('Failed to load available students')
+      // Log for debugging
+      console.log('Available students query result:', { data, count })
+      
+      setAvailableStudents(count || 0)
+    } catch (error) {
+      console.error('Error loading available students:', error)
+      toast.error('Failed to load student count')
     }
   }
 
@@ -91,7 +93,11 @@ export default function TeamFormation() {
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-lg font-medium text-gray-900">Available Students</h2>
-              <p className="text-sm text-gray-500">Students looking for teams</p>
+              <p className="text-sm text-gray-500">
+                {availableStudents === 1 
+                  ? '1 student looking for a team'
+                  : `${availableStudents} students looking for teams`}
+              </p>
             </div>
             <div className="flex items-center space-x-2">
               <Users className="h-5 w-5 text-gray-400" />

@@ -1,64 +1,163 @@
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+'use client'
+
+import { useState, useEffect } from 'react'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { Card } from '@/components/ui/Card'
 import { Users, BookOpen, UserCheck } from 'lucide-react'
 import Link from 'next/link'
 
-export const dynamic = 'force-dynamic'
-
-export default async function InstructorDashboard() {
-  const supabase = createServerComponentClient({ cookies })
-
-  // Fetch statistics with proper filters
-  const { count: totalStudents } = await supabase
-    .from('users')
-    .select('id', { count: 'exact', head: true })
-    .eq('role', 'student')
-
-  const { count: unassignedStudents } = await supabase
-    .from('users')
-    .select('id', { count: 'exact', head: true })
-    .eq('role', 'student')
-    .eq('looking_for_team', true)
-    .not('id', 'in', (
-      supabase
-        .from('team_members')
-        .select('user_id')
-    ))
-
-  const { count: totalTeams } = await supabase
-    .from('teams')
-    .select('id', { count: 'exact', head: true })
-
-  const stats = [
+export default function InstructorDashboard() {
+  const [stats, setStats] = useState([
     {
       name: 'Total Students',
-      value: totalStudents || 0,
+      value: 0,
       icon: Users,
       color: 'text-blue-600',
       bgColor: 'bg-blue-100'
     },
     {
       name: 'Unassigned Students',
-      value: unassignedStudents || 0,
+      value: 0,
       icon: UserCheck,
       color: 'text-purple-600',
       bgColor: 'bg-purple-100'
     },
     {
       name: 'Active Teams',
-      value: totalTeams || 0,
+      value: 0,
       icon: BookOpen,
       color: 'text-green-600',
       bgColor: 'bg-green-100'
     }
-  ]
+  ])
+
+  const supabase = createClientComponentClient()
+
+  const loadStats = async () => {
+    try {
+      // Check authentication
+      const { data: { session }, error: authError } = await supabase.auth.getSession()
+      
+      if (authError || !session) {
+        console.error('Auth error:', authError)
+        return
+      }
+
+      console.log('Authenticated as:', session.user.email)
+
+      // First, let's check if we can access the users table at all
+      const { data: allUsers, error: usersError } = await supabase
+        .from('users')
+        .select('*')
+      
+      console.log('All users in database:', allUsers)
+
+      // Then check specific queries
+      const { data: students } = await supabase
+        .from('users')
+        .select('*')
+        .eq('role', 'student')
+      
+      console.log('Students only:', students)
+
+      const { data: instructors } = await supabase
+        .from('users')
+        .select('*')
+        .eq('role', 'instructor')
+      
+      console.log('Instructors only:', instructors)
+
+      // Get total students with detailed error logging
+      const studentsQuery = await supabase
+        .from('users')
+        .select('id, email, role')
+        .eq('role', 'student')
+      
+      console.log('Students query result:', {
+        data: studentsQuery.data,
+        error: studentsQuery.error,
+        status: studentsQuery.status
+      })
+
+      // Get unassigned students with detailed error logging
+      const unassignedQuery = await supabase
+        .from('users')
+        .select('id, email, role, looking_for_team')
+        .eq('role', 'student')
+        .eq('looking_for_team', true)
+      
+      console.log('Unassigned query result:', {
+        data: unassignedQuery.data,
+        error: unassignedQuery.error,
+        status: unassignedQuery.status
+      })
+
+      // Get teams with detailed error logging
+      const teamsQuery = await supabase
+        .from('teams')
+        .select('id, name')
+      
+      console.log('Teams query result:', {
+        data: teamsQuery.data,
+        error: teamsQuery.error,
+        status: teamsQuery.status
+      })
+
+      // Update stats only if we have valid data
+      if (!studentsQuery.error && !unassignedQuery.error && !teamsQuery.error) {
+        setStats([
+          {
+            name: 'Total Students',
+            value: studentsQuery.data?.length || 0,
+            icon: Users,
+            color: 'text-blue-600',
+            bgColor: 'bg-blue-100'
+          },
+          {
+            name: 'Unassigned Students',
+            value: unassignedQuery.data?.length || 0,
+            icon: UserCheck,
+            color: 'text-purple-600',
+            bgColor: 'bg-purple-100'
+          },
+          {
+            name: 'Active Teams',
+            value: teamsQuery.data?.length || 0,
+            icon: BookOpen,
+            color: 'text-green-600',
+            bgColor: 'bg-green-100'
+          }
+        ])
+      }
+    } catch (error) {
+      console.error('Error in loadStats:', error)
+    }
+  }
+
+  useEffect(() => {
+    loadStats()
+    
+    const channel = supabase
+      .channel('schema-db-changes')
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public',
+        table: 'users'
+      }, () => {
+        console.log('Database change detected')
+        loadStats()
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [])
 
   return (
     <div>
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Dashboard Overview</h1>
 
-      {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         {stats.map((stat) => {
           const Icon = stat.icon
