@@ -8,6 +8,8 @@ import { createClient } from '@/lib/supabase'
 import { toast } from 'react-hot-toast'
 import FindTeamButton from '@/components/teams/FindTeamButton'
 import TeamAvailabilityCard from '@/components/teams/TeamAvailabilityCard'
+import Tooltip from '@/components/ui/Tooltip'
+import BrowseStudentsCard from '@/components/dashboard/BrowseStudentsCard'
 
 export const dynamic = 'force-dynamic'
 
@@ -169,19 +171,7 @@ export default async function StudentDashboard() {
         />
 
         {/* Browse Students Card */}
-        <Link href="/student-dashboard/students" className="h-full">
-          <Card className={`p-6 h-full flex flex-col justify-between hover:shadow-md transition-shadow ${
-            completionPercentage < 100 ? 'opacity-50 cursor-not-allowed' : ''
-          }`}>
-            <div className="flex items-center space-x-3 mb-4">
-              <Search className="h-8 w-8 text-purple-600" />
-              <h3 className="text-xl font-medium">Browse Students</h3>
-            </div>
-            <p className="text-sm text-gray-600">
-              Find potential teammates based on skills
-            </p>
-          </Card>
-        </Link>
+        <BrowseStudentsCard completionPercentage={completionPercentage} />
       </div>
     </div>
   )
