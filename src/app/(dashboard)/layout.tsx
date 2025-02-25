@@ -21,6 +21,10 @@ export default async function DashboardLayout({
     .eq('id', user.id)
     .single()
 
+  if (!userProfile) {
+    redirect('/auth/signin')
+  }
+
   return (
     <div className="min-h-screen bg-gray-100">
       <Navbar user={userProfile} />

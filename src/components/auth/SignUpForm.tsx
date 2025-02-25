@@ -1,12 +1,14 @@
 'use client'
 
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { useState } from 'react'
-import { createClient } from '@/lib/supabase'
 import Button from '@/components/ui/Button'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-
+import toast from 'react-hot-toast'
 export default function SignUpForm() {
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const router = useRouter()
   const [formData, setFormData] = useState({
     email: '',
@@ -17,7 +19,7 @@ export default function SignUpForm() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
-  const supabase = createClient()
+  const supabase = createClientComponentClient()
 
   const verifyAuthUser = async (userId: string, attempts = 0): Promise<boolean> => {
     if (attempts >= 5) return false
@@ -47,7 +49,29 @@ export default function SignUpForm() {
       return false
     }
   }
+  const handleSignIn = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
 
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
+
+      if (error) throw error
+
+      // Successfully signed in
+      toast.success('Signed in successfully')
+      router.push('/student-dashboard')
+      router.refresh()
+    } catch (error) {
+      console.error('Error signing in:', error)
+      toast.error('Failed to sign in')
+    } finally {
+      setLoading(false)
+    }
+  }
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)

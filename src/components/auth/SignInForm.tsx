@@ -98,8 +98,12 @@ export default function SignInForm() {
       console.log('Session cookie set, redirecting...')
       toast.success('Signed in successfully')
       
-      // Use replace and force a hard navigation
-      window.location.href = '/dashboard'
+      // Update redirect path based on user role
+      if (profile.role === 'student') {
+        window.location.href = '/student-dashboard'
+      } else {
+        window.location.href = '/dashboard'
+      }
     } catch (error: any) {
       console.error('Full error object:', error)
       setError(error.message)
