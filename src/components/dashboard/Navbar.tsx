@@ -1,14 +1,16 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
-import { Menu, Bell, Settings, LogOut } from 'lucide-react'
+import { Menu, Bell, Settings, LogOut, Loader2 } from 'lucide-react'
 import { toast } from 'react-hot-toast'
+import { useProfileStore } from '@/store/useProfileStore'
 
 interface NavbarProps {
   user?: {
+    id: string 
     full_name: string
     email: string
     role: string
@@ -20,6 +22,35 @@ export default function Navbar({ user }: NavbarProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const router = useRouter()
   const supabase = createClient()
+  const { avatarUrl, updateAvatarUrl, isLoading, setLoading } = useProfileStore()
+
+  // Add this useEffect to load the avatar URL on mount
+  useEffect(() => {
+    const loadProfileImage = async () => {
+      try {
+        if (!user) return
+
+        setLoading(true)
+        const { data, error } = await supabase
+          .from('users')
+          .select('avatar_url')
+          .eq('id', user.id)
+          .single()
+
+        if (error) throw error
+        
+        if (data?.avatar_url) {
+          updateAvatarUrl(data.avatar_url)
+        }
+      } catch (error) {
+        console.error('Error loading profile image:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadProfileImage()
+  }, [user?.id]) // Depend on user.id to reload if user changes
 
   // If no user, show loading state or minimal navbar
   if (!user) {
@@ -83,27 +114,51 @@ export default function Navbar({ user }: NavbarProps) {
             </button>
 
             <div className="ml-3 relative">
-              <div>
-                <button
-                  className="flex items-center max-w-xs rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                  onClick={() => setIsProfileOpen(!isProfileOpen)}
-                >
-                  <span className="sr-only">Open user menu</span>
-                  <div className="h-8 w-8 rounded-full bg-indigo-600 flex items-center justify-center text-white">
-                    {user.full_name[0].toUpperCase()}
-                  </div>
-                </button>
-              </div>
+              <button
+                className="flex items-center rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                onClick={() => setIsProfileOpen(!isProfileOpen)}
+              >
+                <span className="sr-only">Open user menu</span>
+                <div className="relative h-8 w-8 rounded-full overflow-hidden">
+                  {isLoading ? (
+                    <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
+                      <Loader2 className="h-4 w-4 text-gray-600 animate-spin" />
+                    </div>
+                  ) : avatarUrl ? (
+                    <img
+                      src={avatarUrl}
+                      alt="Profile"
+                      className="h-full w-full object-cover transition-opacity"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement
+                        target.style.display = 'none'
+                      }}
+                    />
+                  ) : (
+                    <div className="h-full w-full bg-indigo-600 flex items-center justify-center transition-colors">
+                      <span className="text-sm font-medium text-white">
+                        {user.full_name[0]?.toUpperCase()}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </button>
 
               {isProfileOpen && (
-                <div className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5">
+                <div 
+                  className="absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50"
+                  style={{
+                    minWidth: '200px',
+                    maxWidth: '280px'
+                  }}
+                >
                   <div className="py-1">
-                    <div className="px-4 py-2 text-sm text-gray-700 border-b">
-                      <p className="font-medium">{user.full_name}</p>
-                      <p className="text-gray-500">{user.email}</p>
+                    <div className="px-4 py-3 text-sm text-gray-700 border-b">
+                      <p className="font-medium truncate">{user.full_name}</p>
+                      <p className="text-gray-500 truncate">{user.email}</p>
                     </div>
                     <button
-                      onClick={() => router.push('/dashboard/settings')}
+                      onClick={() => router.push('/settings/profile')}
                       className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
                     >
                       <Settings className="h-4 w-4 mr-2" />
@@ -125,4 +180,12 @@ export default function Navbar({ user }: NavbarProps) {
       </div>
     </nav>
   )
-} 
+}
+
+const styles = `
+.fixed-width-container {
+  width: 32px; /* Same as h-8 */
+  height: 32px; /* Same as w-8 */
+  display: inline-block;
+}
+` 

@@ -1,140 +1,292 @@
-import { SupabaseClient } from '@supabase/supabase-js'
+import { createClient } from '@/lib/supabase';
+import { Database } from '@/types/supabase';
 
-interface TeamMatchingRules {
-  minTeamSize: number;
-  maxTeamSize: number;
-  courseId: string;
-  considerSkills?: boolean;
-}
-
-interface Student {
-  id: string;
-  full_name: string;
-  skills: {
+export type Student = Database['public']['Tables']['users']['Row'] & {
+  skills?: {
     skill_id: string;
     proficiency_level: number;
   }[];
+  availability?: string[];
+  project_preferences?: string[];
+};
+
+interface TeamMatchingCriteria {
+  minTeamSize: number;
+  maxTeamSize: number;
+  considerSkills: boolean;
+  balanceTeamSize?: boolean;
+  considerProjectPreferences?: boolean;
+  considerAvailability?: boolean;
+  skillWeighting?: number; // 0-1, how much to weight skill compatibility
+}
+
+interface CompatibilityScore {
+  total: number;
+  skillScore: number;
+  availabilityScore: number;
+  preferenceScore: number;
 }
 
 export class TeamMatchingService {
-  private supabase: SupabaseClient;
+  private supabase;
 
-  constructor(supabase: SupabaseClient) {
-    this.supabase = supabase;
+  constructor() {
+    this.supabase = createClient();
   }
 
-  async getAvailableStudents(courseId: string): Promise<Student[]> {
-    const { data, error } = await this.supabase
-      .from('users')
-      .select(`
-        id,
-        full_name,
-        student_skills (
-          skill_id,
-          proficiency_level
-        )
-      `)
-      .eq('role', 'student')
-      .eq('looking_for_team', true)
-      .not('id', 'in', (
-        this.supabase
-          .from('team_members')
-          .select('user_id')
-      ));
+  /**
+   * Main method to match students into teams based on given criteria
+   */
+  async matchTeams(criteria: TeamMatchingCriteria): Promise<Student[][]> {
+    try {
+      // Fetch all available students
+      const { data: students, error } = await this.supabase
+        .from('users')
+        .select(`
+          *,
+          student_skills (skill_id, proficiency_level),
+          availability,
+          project_preferences
+        `)
+        .eq('role', 'student')
+        .eq('looking_for_team', true);
 
-    if (error) throw error;
-    return (data || []).map(student => ({
-      id: student.id,
-      full_name: student.full_name,
-      skills: student.student_skills
-    }));
-  }
+      if (error) throw error;
+      if (!students?.length) return [];
 
-  async createTeams(rules: TeamMatchingRules) {
-    const students = await this.getAvailableStudents(rules.courseId);
-    
-    // Shuffle students for random distribution
-    const shuffledStudents = this.shuffleArray(students);
-    
-    // Create teams
-    const teams: Student[][] = [];
-    let currentTeam: Student[] = [];
+      // Initialize teams array
+      const teams: Student[][] = [];
+      let unassignedStudents = [...students];
 
-    for (const student of shuffledStudents) {
-      currentTeam.push(student);
-      
-      if (currentTeam.length >= rules.maxTeamSize) {
-        teams.push(currentTeam);
-        currentTeam = [];
-      }
-    }
-
-    // Handle remaining students
-    if (currentTeam.length >= rules.minTeamSize) {
-      teams.push(currentTeam);
-    } else if (currentTeam.length > 0) {
-      // Distribute remaining students across existing teams
-      for (const student of currentTeam) {
-        const smallestTeam = teams.reduce((a, b) => 
-          a.length <= b.length ? a : b
+      // Phase 1: Create initial teams based on optimal size
+      while (unassignedStudents.length >= criteria.minTeamSize) {
+        const newTeam = await this.formOptimalTeam(
+          unassignedStudents,
+          criteria
         );
-        smallestTeam.push(student);
+
+        if (newTeam.length < criteria.minTeamSize) break;
+
+        teams.push(newTeam);
+        unassignedStudents = unassignedStudents.filter(
+          student => !newTeam.find(s => s.id === student.id)
+        );
+      }
+
+      // Phase 2: Handle remaining students
+      if (unassignedStudents.length > 0) {
+        await this.distributeRemainingStudents(
+          unassignedStudents,
+          teams,
+          criteria
+        );
+      }
+
+      return teams;
+    } catch (error) {
+      console.error('Error in matchTeams:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Forms an optimal team from available students
+   */
+  private async formOptimalTeam(
+    students: Student[],
+    criteria: TeamMatchingCriteria
+  ): Promise<Student[]> {
+    const team: Student[] = [];
+    const firstStudent = students[0];
+    team.push(firstStudent);
+
+    while (
+      team.length < criteria.maxTeamSize &&
+      team.length < students.length
+    ) {
+      let bestMatch: Student | null = null;
+      let bestScore = -1;
+
+      for (const candidate of students) {
+        if (team.find(s => s.id === candidate.id)) continue;
+
+        const score = await this.calculateTeamCompatibility(
+          [...team, candidate],
+          criteria
+        );
+
+        if (score.total > bestScore) {
+          bestScore = score.total;
+          bestMatch = candidate;
+        }
+      }
+
+      if (bestMatch) {
+        team.push(bestMatch);
+      } else {
+        break;
       }
     }
 
-    // Save teams to database
-    await this.saveTeams(teams, rules.courseId);
-    
-    return teams;
+    return team;
   }
 
-  private shuffleArray<T>(array: T[]): T[] {
-    const shuffled = [...array];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  /**
+   * Calculates compatibility score for a potential team
+   */
+  private async calculateTeamCompatibility(
+    team: Student[],
+    criteria: TeamMatchingCriteria
+  ): Promise<CompatibilityScore> {
+    const scores: CompatibilityScore = {
+      total: 0,
+      skillScore: 0,
+      availabilityScore: 0,
+      preferenceScore: 0
+    };
+
+    if (criteria.considerSkills) {
+      scores.skillScore = this.calculateSkillCompatibility(team);
     }
-    return shuffled;
+
+    if (criteria.considerAvailability) {
+      scores.availabilityScore = this.calculateAvailabilityCompatibility(team);
+    }
+
+    if (criteria.considerProjectPreferences) {
+      scores.preferenceScore = this.calculatePreferenceCompatibility(team);
+    }
+
+    // Weight and combine scores
+    scores.total = this.calculateWeightedScore(scores, criteria);
+    return scores;
   }
 
-  private async saveTeams(teams: Student[][], courseId: string) {
-    for (const teamMembers of teams) {
-      // Create team
-      const { data: team, error: teamError } = await this.supabase
-        .from('teams')
-        .insert({
-          course_id: courseId,
-          name: `Team ${Math.random().toString(36).substr(2, 6)}`,
-          created_at: new Date().toISOString()
-        })
-        .select()
-        .single();
+  /**
+   * Calculates skill compatibility score
+   */
+  private calculateSkillCompatibility(team: Student[]): number {
+    let score = 0;
+    const skillCoverage = new Map<string, number>();
 
-      if (teamError) throw teamError;
+    // Map skill distribution
+    team.forEach(student => {
+      student.skills?.forEach(skill => {
+        const current = skillCoverage.get(skill.skill_id) || 0;
+        skillCoverage.set(
+          skill.skill_id,
+          current + skill.proficiency_level
+        );
+      });
+    });
 
-      // Add team members
-      const memberPromises = teamMembers.map(student => 
-        this.supabase
-          .from('team_members')
-          .insert({
-            team_id: team.id,
-            user_id: student.id,
-            joined_at: new Date().toISOString()
-          })
+    // Calculate diversity score
+    const uniqueSkills = skillCoverage.size;
+    const avgProficiency = 
+      Array.from(skillCoverage.values()).reduce((a, b) => a + b, 0) / 
+      skillCoverage.size;
+
+    score = (uniqueSkills * 0.6 + avgProficiency * 0.4) / team.length;
+    return Math.min(score, 1);
+  }
+
+  /**
+   * Calculates availability compatibility score
+   */
+  private calculateAvailabilityCompatibility(team: Student[]): number {
+    if (!team[0].availability) return 0;
+
+    const commonAvailability = team.reduce((common, student) => {
+      if (!student.availability) return common;
+      return common.filter(time => student.availability?.includes(time));
+    }, [...team[0].availability]);
+
+    return commonAvailability.length / 10; // Normalize to 0-1
+  }
+
+  /**
+   * Calculates project preference compatibility score
+   */
+  private calculatePreferenceCompatibility(team: Student[]): number {
+    if (!team[0].project_preferences) return 0;
+
+    const preferenceOverlap = team.reduce((common, student) => {
+      if (!student.project_preferences) return common;
+      return common.filter(pref => 
+        student.project_preferences?.includes(pref)
       );
+    }, [...team[0].project_preferences]);
 
-      // Update student availability status
-      const statusPromises = teamMembers.map(student =>
-        this.supabase
-          .from('users')
-          .update({
-            looking_for_team: false,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', student.id)
-      );
+    return preferenceOverlap.length / 3; // Normalize to 0-1
+  }
 
-      await Promise.all([...memberPromises, ...statusPromises]);
+  /**
+   * Calculates weighted total score based on criteria
+   */
+  private calculateWeightedScore(
+    scores: CompatibilityScore,
+    criteria: TeamMatchingCriteria
+  ): number {
+    const weights = {
+      skills: criteria.skillWeighting || 0.4,
+      availability: 0.3,
+      preferences: 0.3
+    };
+
+    return (
+      scores.skillScore * weights.skills +
+      scores.availabilityScore * weights.availability +
+      scores.preferenceScore * weights.preferences
+    );
+  }
+
+  /**
+   * Distributes remaining students to existing teams
+   */
+  private async distributeRemainingStudents(
+    remaining: Student[],
+    teams: Student[][],
+    criteria: TeamMatchingCriteria
+  ): Promise<void> {
+    for (const student of remaining) {
+      let bestTeam = -1;
+      let bestScore = -1;
+
+      for (let i = 0; i < teams.length; i++) {
+        if (teams[i].length >= criteria.maxTeamSize) continue;
+
+        const score = await this.calculateTeamCompatibility(
+          [...teams[i], student],
+          criteria
+        );
+
+        if (score.total > bestScore) {
+          bestScore = score.total;
+          bestTeam = i;
+        }
+      }
+
+      if (bestTeam !== -1) {
+        teams[bestTeam].push(student);
+      }
     }
+  }
+
+  /**
+   * Validates if a team meets all criteria
+   */
+  async validateTeam(
+    team: Student[],
+    criteria: TeamMatchingCriteria
+  ): Promise<boolean> {
+    if (
+      team.length < criteria.minTeamSize ||
+      team.length > criteria.maxTeamSize
+    ) {
+      return false;
+    }
+
+    const compatibility = await this.calculateTeamCompatibility(team, criteria);
+    return compatibility.total >= 0.5; // Minimum threshold for valid team
   }
 } 
