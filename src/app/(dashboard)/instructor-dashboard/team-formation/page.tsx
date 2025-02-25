@@ -7,6 +7,9 @@ import Button from '@/components/ui/Button'
 import { TeamMatchingService } from '@/services/teamMatching'
 import { toast } from 'react-hot-toast'
 import { Users, AlertCircle } from 'lucide-react'
+import { Student } from '@/services/teamMatching'
+
+type Team = Student[]
 
 export default function TeamFormation() {
   const [loading, setLoading] = useState(false)
@@ -18,6 +21,7 @@ export default function TeamFormation() {
     courseId: '', // We'll add course selection later
     considerSkills: true
   })
+  const [formedTeams, setFormedTeams] = useState<Team[]>([])
 
   useEffect(() => {
     // Initial load
@@ -71,18 +75,45 @@ export default function TeamFormation() {
   }
 
   const handleFormTeams = async () => {
+    setLoading(true);
     try {
-      setLoading(true)
-      const matchingService = new TeamMatchingService(supabase)
-      await matchingService.createTeams(rules)
-      toast.success('Teams formed successfully!')
-      loadAvailableStudents() // Refresh the count
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to form teams')
+      const matchingService = new TeamMatchingService();
+      const teams = await matchingService.matchTeams({
+        minTeamSize: rules.minTeamSize,
+        maxTeamSize: rules.maxTeamSize,
+        considerSkills: rules.considerSkills,
+        balanceTeamSize: true,
+        considerProjectPreferences: true,
+        considerAvailability: true,
+        skillWeighting: 0.4
+      });
+
+      setFormedTeams(teams);
+
+      // Save teams to database
+      for (const team of teams) {
+        const { error } = await supabase
+          .from('teams')
+          .insert({
+            name: `Team ${Math.random().toString(36).substr(2, 9)}`,
+            created_at: new Date().toISOString(),
+            members: team.map(s => s.id)
+          });
+
+        if (error) throw error;
+      }
+
+      toast.success(`
+        Teams Formed: ${teams.length}
+        Students Placed: ${teams.reduce((acc, team) => acc + team.length, 0)}
+      `);
+    } catch (error) {
+      console.error('Error forming teams:', error);
+      toast.error('Failed to form teams');
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   return (
     <div className="space-y-6">
@@ -172,6 +203,25 @@ export default function TeamFormation() {
           </Button>
         </div>
       </Card>
+
+      {formedTeams.length > 0 && (
+        <div className="mt-4">
+          <h3 className="text-lg font-semibold">Formed Teams</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {formedTeams.map((team, index) => (
+              <Card key={index} className="p-4">
+                <h4>Team {index + 1}</h4>
+                <p>Members: {team.length}</p>
+                <ul>
+                  {team.map(student => (
+                    <li key={student.id}>{student.full_name}</li>
+                  ))}
+                </ul>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 } 
