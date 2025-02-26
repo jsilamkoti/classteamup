@@ -5,6 +5,8 @@ import { createClient } from '@/lib/supabase'
 import { Search, Filter } from 'lucide-react'
 import FilterSidebar from '@/components/browse/FilterSidebar'
 import { toast } from 'react-hot-toast'
+import StudentProfileModal from '@/components/students/StudentProfileModal'
+import TeamInviteButton from '@/components/teams/TeamInviteButton'
 
 interface SkillData {
   skill_id: string;
@@ -61,6 +63,8 @@ export default function BrowseStudentsPage() {
     proficiencyLevel: null,
     availability: null
   })
+  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null)
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false)
   const supabase = createClient()
 
   useEffect(() => {
@@ -263,17 +267,34 @@ export default function BrowseStudentsPage() {
 
               {/* Actions */}
               <div className="mt-6 flex justify-end space-x-3">
-                <button className="text-sm text-indigo-600 hover:text-indigo-900">
+                <button 
+                  onClick={() => {
+                    setSelectedStudent(student)
+                    setIsProfileModalOpen(true)
+                  }}
+                  className="text-sm text-indigo-600 hover:text-indigo-900"
+                >
                   View Profile
                 </button>
-                <button className="px-3 py-1 text-sm text-white bg-indigo-600 rounded-md hover:bg-indigo-700">
-                  Invite
-                </button>
+                <TeamInviteButton 
+                  studentId={student.id}
+                  studentName={student.full_name}
+                />
               </div>
             </div>
           ))}
         </div>
       )}
+
+      {/* Add the modal */}
+      <StudentProfileModal
+        isOpen={isProfileModalOpen}
+        onClose={() => {
+          setIsProfileModalOpen(false)
+          setSelectedStudent(null)
+        }}
+        student={selectedStudent}
+      />
     </div>
   )
 } 
