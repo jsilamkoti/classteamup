@@ -68,11 +68,17 @@ export default function BrowseStudentsPage() {
       try {
         setLoading(true)
         
-        // First, get all students
+        // Get current user
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return
+
+        // Get all students except current user who are looking for teams
         const { data: users, error } = await supabase
           .from('users')
           .select('*')
           .eq('role', 'student')
+          .eq('looking_for_team', true)  // Only get students looking for teams
+          .neq('id', user.id)  // Exclude current user
 
         if (error) {
           console.error('Database error:', error.message)
@@ -84,7 +90,7 @@ export default function BrowseStudentsPage() {
         const studentsWithSkills = await Promise.all(
           users.map(async (user) => {
             const { data: skills } = await supabase
-              .from('student_skills') // or 'user_skills' depending on your table name
+              .from('student_skills')
               .select(`
                 skill_id,
                 proficiency_level,
