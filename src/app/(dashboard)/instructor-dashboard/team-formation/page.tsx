@@ -1,33 +1,84 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createClient } from '@/lib/supabase'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { Card } from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
 import { TeamMatchingService } from '@/services/teamMatching'
 import { toast } from 'react-hot-toast'
-import { Users, AlertCircle } from 'lucide-react'
+import { Users, AlertCircle, Loader2, Save, Plus, X } from 'lucide-react'
 import { Student } from '@/services/teamMatching'
+import { validateTeamRules } from '@/lib/utils/teamRules'
+import { useRouter } from 'next/navigation'
+
+interface Course {
+  id: string
+  name: string
+  description: string
+  instructor_id: string
+  created_at: string
+  updated_at: string
+}
 
 type Team = Student[]
 
-export default function TeamFormation() {
+interface Skill {
+  id: string
+  name: string
+}
+
+interface ValidationResult {
+  isValid: boolean
+  errors: string[]
+  warnings: string[]
+}
+
+interface TeamFormationRule {
+  id: string
+  course_id: string
+  min_team_size: number
+  max_team_size: number
+  required_skills: {
+    skillId: string
+    minCount: number
+    minProficiency: number
+  }[]
+  skill_distribution_rules: {
+    diversityWeight: number
+    academicLevelBalance: boolean
+  }
+  created_at: string
+}
+
+export default function TeamFormationPage() {
   const [loading, setLoading] = useState(false)
-  const [availableStudents, setAvailableStudents] = useState(0)
-  const supabase = createClient()
-  const [rules, setRules] = useState({
-    minTeamSize: 3,
-    maxTeamSize: 5,
-    courseId: '', // We'll add course selection later
-    considerSkills: true
+  const [validation, setValidation] = useState<ValidationResult>({
+    isValid: true,
+    errors: [],
+    warnings: []
   })
+  const [formationRule, setFormationRule] = useState<TeamFormationRule>({
+    id: '',
+    course_id: '27a19b51-dc21-40db-9001-4d63949151c5', // Hardcode the course ID
+    min_team_size: 3,
+    max_team_size: 5,
+    required_skills: [],
+    skill_distribution_rules: {
+      diversityWeight: 0.5,
+      academicLevelBalance: true
+    },
+    created_at: new Date().toISOString()
+  })
+  const [isSaving, setIsSaving] = useState(false)
+  const [availableStudents, setAvailableStudents] = useState(0)
+  const [skills, setSkills] = useState<Skill[]>([])
   const [formedTeams, setFormedTeams] = useState<Team[]>([])
+  const supabase = createClientComponentClient()
+  const router = useRouter()
 
   useEffect(() => {
-    // Initial load
     loadAvailableStudents()
 
-    // Real-time subscription for user changes
     const channel = supabase
       .channel('available-students')
       .on(
@@ -38,7 +89,7 @@ export default function TeamFormation() {
           table: 'users'
         },
         () => {
-          loadAvailableStudents() // Reload count on any user changes
+          loadAvailableStudents()
         }
       )
       .subscribe()
@@ -47,6 +98,169 @@ export default function TeamFormation() {
       supabase.removeChannel(channel)
     }
   }, [])
+
+  useEffect(() => {
+    const fetchSkills = async () => {
+      const { data, error } = await supabase
+        .from('skills')
+        .select('id, name')
+        .order('name')
+
+      if (error) {
+        toast.error('Failed to load skills')
+        return
+      }
+
+      setSkills(data || [])
+    }
+
+    fetchSkills()
+  }, [])
+
+  // Update validation whenever rules change
+  useEffect(() => {
+    setValidation(validateTeamRules(formationRule))
+  }, [formationRule])
+
+  // Update the loadRules function to use single loading state
+  useEffect(() => {
+    if (!formationRule.course_id) return
+    
+    const loadRules = async () => {
+      setLoading(true)  // Use single loading state
+      try {
+        const { data, error } = await supabase
+          .from('team_formation_rules')
+          .select('*')
+          .eq('course_id', formationRule.course_id)
+          .maybeSingle()
+
+        if (error) throw error
+
+        if (data) {
+          setFormationRule(data)
+        } else {
+          // Reset to defaults if no rules exist
+          setFormationRule(prev => ({
+            ...prev,
+            min_team_size: 3,
+            max_team_size: 5,
+            required_skills: [],
+            skill_distribution_rules: {
+              diversityWeight: 0.5,
+              academicLevelBalance: true
+            }
+          }))
+        }
+      } catch (error) {
+        console.error('Error loading rules:', error)
+        toast.error('Failed to load course rules')
+      } finally {
+        setLoading(false)  // Use single loading state
+      }
+    }
+
+    loadRules()
+  }, [formationRule.course_id])
+
+  const fetchExistingRules = async (courseId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('team_formation_rules')
+        .select('*')
+        .eq('course_id', courseId)
+        .single()
+
+      if (error && error.code !== 'PGRST116') {
+        throw error
+      }
+
+      if (data) {
+        setFormationRule(data)
+      }
+    } catch (error) {
+      console.error('Error fetching rules:', error)
+      toast.error('Failed to load existing rules')
+    }
+  }
+
+  const handleSaveRules = async () => {
+    try {
+      setIsSaving(true)
+      
+      // Get the current user
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (userError) throw userError
+      
+      console.log('Current user:', user)
+
+      const ruleData = {
+        id: crypto.randomUUID(),
+        course_id: '27a19b51-dc21-40db-9001-4d63949151c5',
+        min_team_size: formationRule.min_team_size,
+        max_team_size: formationRule.max_team_size,
+        required_skills: formationRule.required_skills,
+        skill_distribution_rules: formationRule.skill_distribution_rules,
+        created_at: new Date().toISOString()
+      }
+
+      console.log('Attempting to save:', ruleData)
+
+      // Delete any existing rules for this course
+      const { error: deleteError } = await supabase
+        .from('team_formation_rules')
+        .delete()
+        .eq('course_id', ruleData.course_id)
+
+      if (deleteError) {
+        console.error('Delete error:', deleteError)
+        throw deleteError
+      }
+
+      // Insert new rule
+      const { data, error: insertError } = await supabase
+        .from('team_formation_rules')
+        .insert(ruleData)
+        .select()
+
+      if (insertError) {
+        console.error('Insert error:', insertError)
+        throw insertError
+      }
+
+      console.log('Save successful:', data)
+      toast.success('Team formation rules saved successfully')
+      
+    } catch (error: any) {
+      console.error('Full error:', error)
+      toast.error(`Failed to save: ${error.message}`)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const addSkillRequirement = () => {
+    if (skills.length === 0) return
+
+    setFormationRule(prev => ({
+      ...prev,
+      required_skills: [
+        ...prev.required_skills,
+        {
+          skillId: skills[0].id,
+          minCount: 1,
+          minProficiency: 3
+        }
+      ]
+    }))
+  }
+
+  const removeSkillRequirement = (index: number) => {
+    setFormationRule(prev => ({
+      ...prev,
+      required_skills: prev.required_skills.filter((_, i) => i !== index)
+    }))
+  }
 
   const loadAvailableStudents = async () => {
     try {
@@ -75,153 +289,309 @@ export default function TeamFormation() {
   }
 
   const handleFormTeams = async () => {
-    setLoading(true);
     try {
-      const matchingService = new TeamMatchingService();
+      setLoading(true)
+      const matchingService = new TeamMatchingService()
+      
       const teams = await matchingService.matchTeams({
-        minTeamSize: rules.minTeamSize,
-        maxTeamSize: rules.maxTeamSize,
-        considerSkills: rules.considerSkills,
+        minTeamSize: formationRule.min_team_size,
+        maxTeamSize: formationRule.max_team_size,
+        considerSkills: true,
         balanceTeamSize: true,
         considerProjectPreferences: true,
         considerAvailability: true,
-        skillWeighting: 0.4
-      });
-
-      setFormedTeams(teams);
+        skillWeighting: formationRule.skill_distribution_rules.diversityWeight
+      })
 
       // Save teams to database
       for (const team of teams) {
         const { error } = await supabase
           .from('teams')
           .insert({
+            course_id: formationRule.course_id,
             name: `Team ${Math.random().toString(36).substr(2, 9)}`,
             created_at: new Date().toISOString(),
             members: team.map(s => s.id)
-          });
+          })
 
-        if (error) throw error;
+        if (error) throw error
       }
 
-      toast.success(`
-        Teams Formed: ${teams.length}
-        Students Placed: ${teams.reduce((acc, team) => acc + team.length, 0)}
-      `);
+      toast.success(`Successfully formed ${teams.length} teams`)
+      router.push('/instructor-dashboard/teams') // Redirect to teams page
     } catch (error) {
-      console.error('Error forming teams:', error);
-      toast.error('Failed to form teams');
+      console.error('Error forming teams:', error)
+      toast.error('Failed to form teams')
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900">Team Formation</h1>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <h1 className="text-3xl font-bold text-gray-900 mb-8">Team Formation</h1>
 
-      <Card className="p-6">
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
+      {/* Available Students Card */}
+      <Card className="mb-8">
+        <div className="p-6">
+          <div className="flex justify-between items-center">
             <div>
-              <h2 className="text-lg font-medium text-gray-900">Available Students</h2>
-              <p className="text-sm text-gray-500">
-                {availableStudents === 1 
-                  ? '1 student looking for a team'
-                  : `${availableStudents} students looking for teams`}
-              </p>
+              <h2 className="text-2xl font-semibold text-gray-900 mb-2">Available Students</h2>
+              <p className="text-gray-600 text-lg">{availableStudents} student{availableStudents !== 1 ? 's' : ''} looking for a team</p>
             </div>
-            <div className="flex items-center space-x-2">
-              <Users className="h-5 w-5 text-gray-400" />
-              <span className="text-2xl font-bold text-gray-900">{availableStudents}</span>
+            <div className="flex items-center bg-gray-50 px-4 py-2 rounded-lg">
+              <Users className="h-6 w-6 text-gray-500 mr-2" />
+              <span className="text-2xl font-semibold text-gray-900">{availableStudents}</span>
             </div>
           </div>
 
-          {availableStudents < rules.minTeamSize && (
-            <div className="bg-yellow-50 p-4 rounded-md">
+          {availableStudents < formationRule.min_team_size && (
+            <div className="mt-4 p-4 bg-yellow-50 border border-yellow-100 rounded-md">
               <div className="flex">
-                <AlertCircle className="h-5 w-5 text-yellow-400" />
+                <AlertCircle className="h-5 w-5 text-yellow-500" />
                 <div className="ml-3">
-                  <h3 className="text-sm font-medium text-yellow-800">
-                    Not Enough Students
-                  </h3>
+                  <h3 className="text-base font-medium text-yellow-800">Not Enough Students</h3>
                   <p className="text-sm text-yellow-700 mt-1">
-                    Wait for at least {rules.minTeamSize} students to be available before forming teams.
+                    Wait for at least {formationRule.min_team_size} students to be available before forming teams.
                   </p>
                 </div>
               </div>
             </div>
           )}
-
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Minimum Team Size
-              </label>
-              <input
-                type="number"
-                value={rules.minTeamSize}
-                onChange={(e) => setRules({ ...rules, minTeamSize: parseInt(e.target.value) })}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                min={2}
-                max={rules.maxTeamSize}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Maximum Team Size
-              </label>
-              <input
-                type="number"
-                value={rules.maxTeamSize}
-                onChange={(e) => setRules({ ...rules, maxTeamSize: parseInt(e.target.value) })}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                min={rules.minTeamSize}
-              />
-            </div>
-
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                id="considerSkills"
-                checked={rules.considerSkills}
-                onChange={(e) => setRules({ ...rules, considerSkills: e.target.checked })}
-                className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-              />
-              <label htmlFor="considerSkills" className="ml-2 block text-sm text-gray-700">
-                Consider skill distribution when forming teams
-              </label>
-            </div>
-          </div>
-
-          <Button
-            onClick={handleFormTeams}
-            disabled={loading || availableStudents < rules.minTeamSize}
-            className="w-full"
-          >
-            {loading ? 'Forming Teams...' : 'Form Teams Now'}
-          </Button>
         </div>
       </Card>
 
-      {formedTeams.length > 0 && (
-        <div className="mt-4">
-          <h3 className="text-lg font-semibold">Formed Teams</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {formedTeams.map((team, index) => (
-              <Card key={index} className="p-4">
-                <h4>Team {index + 1}</h4>
-                <p>Members: {team.length}</p>
-                <ul>
-                  {team.map(student => (
-                    <li key={student.id}>{student.full_name}</li>
-                  ))}
-                </ul>
-              </Card>
-            ))}
-          </div>
+      <h2 className="text-2xl font-semibold text-gray-900 mb-6">Team Formation Rules</h2>
+
+      {/* Validation Messages */}
+      {(validation.errors.length > 0 || validation.warnings.length > 0) && (
+        <div className="mb-6 space-y-4">
+          {validation.errors.map((error, index) => (
+            <div key={index} className="p-3 bg-red-50 border border-red-200 rounded-md">
+              <p className="text-sm text-red-600">{error}</p>
+            </div>
+          ))}
+          {validation.warnings.map((warning, index) => (
+            <div key={index} className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+              <p className="text-sm text-yellow-600">{warning}</p>
+            </div>
+          ))}
         </div>
       )}
+
+      {/* Team Size */}
+      <Card className="mb-6">
+        <div className="p-6">
+          <h2 className="text-xl font-medium mb-4">Team Size</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div>
+              <label className="block text-gray-700 mb-2">Minimum Team Size</label>
+              <input
+                type="number"
+                min={2}
+                max={formationRule.max_team_size}
+                value={formationRule.min_team_size}
+                onChange={(e) => setFormationRule(prev => ({
+                  ...prev,
+                  min_team_size: parseInt(e.target.value)
+                }))}
+                className="w-full p-2 border rounded-md"
+              />
+            </div>
+            <div>
+              <label className="block text-gray-700 mb-2">Maximum Team Size</label>
+              <input
+                type="number"
+                min={formationRule.min_team_size}
+                value={formationRule.max_team_size}
+                onChange={(e) => setFormationRule(prev => ({
+                  ...prev,
+                  max_team_size: parseInt(e.target.value)
+                }))}
+                className="w-full p-2 border rounded-md"
+              />
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      {/* Skill Requirements */}
+      <Card className="mb-6">
+        <div className="p-6">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-medium">Required Skills</h2>
+            <button
+              onClick={addSkillRequirement}
+              className="inline-flex items-center px-3 py-1 border border-transparent text-sm font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200"
+            >
+              <Plus className="h-4 w-4 mr-1" />
+              Add Skill
+            </button>
+          </div>
+
+          <div className="space-y-4">
+            {formationRule.required_skills.map((req, index) => (
+              <div key={index} className="flex items-center space-x-4 bg-gray-50 p-4 rounded-md">
+                <select
+                  value={req.skillId}
+                  onChange={(e) => setFormationRule(prev => ({
+                    ...prev,
+                    required_skills: prev.required_skills.map((r, i) =>
+                      i === index ? { ...r, skillId: e.target.value } : r
+                    )
+                  }))}
+                  className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                >
+                  {skills.map(skill => (
+                    <option key={skill.id} value={skill.id}>
+                      {skill.name}
+                    </option>
+                  ))}
+                </select>
+
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Min. Members
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={formationRule.max_team_size}
+                    value={req.minCount}
+                    onChange={(e) => setFormationRule(prev => ({
+                      ...prev,
+                      required_skills: prev.required_skills.map((r, i) =>
+                        i === index ? { ...r, minCount: parseInt(e.target.value) } : r
+                      )
+                    }))}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Min. Proficiency
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={5}
+                    value={req.minProficiency}
+                    onChange={(e) => setFormationRule(prev => ({
+                      ...prev,
+                      required_skills: prev.required_skills.map((r, i) =>
+                        i === index ? { ...r, minProficiency: parseInt(e.target.value) } : r
+                      )
+                    }))}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <button
+                  onClick={() => removeSkillRequirement(index)}
+                  className="mt-6 text-gray-400 hover:text-gray-500"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            ))}
+
+            {formationRule.required_skills.length === 0 && (
+              <p className="text-sm text-gray-500 text-center py-4">
+                No skill requirements added. Click "Add Skill" to define required skills for teams.
+              </p>
+            )}
+          </div>
+        </div>
+      </Card>
+
+      {/* Team Diversity Settings */}
+      <Card className="mb-6">
+        <div className="p-6">
+          <h2 className="text-xl font-medium mb-4">Team Diversity</h2>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                Diversity Weight: {formationRule.skill_distribution_rules.diversityWeight}
+              </label>
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.1}
+                value={formationRule.skill_distribution_rules.diversityWeight}
+                onChange={(e) => setFormationRule(prev => ({
+                  ...prev,
+                  skill_distribution_rules: {
+                    ...prev.skill_distribution_rules,
+                    diversityWeight: parseFloat(e.target.value)
+                  }
+                }))}
+                className="mt-2 w-full"
+              />
+              <p className="mt-1 text-sm text-gray-500">
+                Higher values prioritize skill diversity in teams
+              </p>
+            </div>
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                checked={formationRule.skill_distribution_rules.academicLevelBalance}
+                onChange={(e) => setFormationRule(prev => ({
+                  ...prev,
+                  skill_distribution_rules: {
+                    ...prev.skill_distribution_rules,
+                    academicLevelBalance: e.target.checked
+                  }
+                }))}
+                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+              />
+              <label className="ml-2 block text-sm text-gray-900">
+                Balance academic levels across teams
+              </label>
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      {/* Action Buttons */}
+      <div className="mt-8 flex justify-end space-x-4">
+        <Button
+          onClick={handleSaveRules}
+          disabled={isSaving}
+          className="flex items-center"
+        >
+          {isSaving ? (
+            <>
+              <Loader2 className="animate-spin -ml-1 mr-2 h-5 w-5" />
+              Saving...
+            </>
+          ) : (
+            <>
+              <Save className="-ml-1 mr-2 h-5 w-5" />
+              Save Rules
+            </>
+          )}
+        </Button>
+
+        <Button
+          onClick={handleFormTeams}
+          disabled={loading || availableStudents < formationRule.min_team_size}
+          className="flex items-center bg-indigo-600 text-white"
+        >
+          {loading ? (
+            <>
+              <Loader2 className="animate-spin -ml-1 mr-2 h-5 w-5" />
+              Forming Teams...
+            </>
+          ) : (
+            <>
+              <Users className="-ml-1 mr-2 h-5 w-5" />
+              Form Teams
+            </>
+          )}
+        </Button>
+      </div>
     </div>
   )
 } 
