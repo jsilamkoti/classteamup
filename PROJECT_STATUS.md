@@ -41,9 +41,9 @@ A platform that helps students find and form teams for projects based on their s
 - [ ] Notifications area
 
 ### Team Formation
-- [ ] Team creation
-- [ ] Team joining
-- [ ] Team matching algorithm
+- [X] Team creation
+- [X] Team joining
+- [X] Team matching algorithm
 - [ ] Team size constraints
 - [ ] Skill compatibility checking
 

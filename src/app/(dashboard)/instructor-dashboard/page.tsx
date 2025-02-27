@@ -5,8 +5,11 @@ import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { Card } from '@/components/ui/Card'
 import { Users, BookOpen, UserCheck } from 'lucide-react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import Button from '@/components/ui/Button'
 
 export default function InstructorDashboard() {
+  const router = useRouter()
   const [stats, setStats] = useState([
     {
       name: 'Total Students',
@@ -154,11 +157,15 @@ export default function InstructorDashboard() {
     }
   }, [])
 
-  return (
-    <div>
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Dashboard Overview</h1>
+  const handleFormTeams = () => {
+    router.push('/instructor-dashboard/team-formation')
+  }
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+  return (
+    <div className="space-y-6">
+      <h1 className="text-2xl font-bold text-gray-900">Dashboard Overview</h1>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {stats.map((stat) => {
           const Icon = stat.icon
           return (
@@ -177,31 +184,22 @@ export default function InstructorDashboard() {
         })}
       </div>
 
-      {/* Quick Actions */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card className="p-6">
           <h2 className="text-lg font-medium text-gray-900 mb-4">Quick Actions</h2>
           <div className="space-y-4">
-            <Link 
-              href="/instructor-dashboard/team-formation"
-              className="block w-full text-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
-            >
-              Form New Teams
+            <Link href="/instructor-dashboard/team-formation">
+              <Button className="w-full">
+                Form New Teams
+              </Button>
             </Link>
-            <Link 
-              href="/instructor-dashboard/courses"
-              className="block w-full text-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-            >
-              Manage Courses
-            </Link>
+
           </div>
         </Card>
 
         <Card className="p-6">
           <h2 className="text-lg font-medium text-gray-900 mb-4">Recent Activity</h2>
-          <p className="text-sm text-gray-500">
-            No recent activity to display
-          </p>
+          <p className="text-gray-500">No recent activity to display</p>
         </Card>
       </div>
     </div>
