@@ -6,7 +6,6 @@ import { Card } from '@/components/ui/Card'
 import { toast } from 'react-hot-toast'
 import { Plus, X, Save, Loader2 } from 'lucide-react'
 import { validateTeamRules } from '@/lib/utils/teamRules'
-import TeamPreview from '@/components/teams/TeamPreview'
 
 interface Skill {
   id: string
@@ -510,14 +509,6 @@ export default function TeamFormationPage() {
                 )}
               </div>
             </Card>
-          </div>
-
-          {/* Preview section to be added */}
-          <div className="mt-8">
-            <TeamPreview 
-              rules={formationRule}
-              courseId={formationRule.course_id}
-            />
           </div>
         </>
       )}
