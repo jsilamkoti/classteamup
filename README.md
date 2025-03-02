@@ -6,7 +6,7 @@
 
 ClassTeamUp is a modern web application designed to streamline the team formation process in educational settings. Built for instructors and students, it automatically creates optimal teams based on skills, preferences, and availability.
 
-![ClassTeamUp Dashboard](https://placeholder.com/dashboard-preview.png)
+![ClassTeamUp Dashboard](https://placehold.co/800x400?text=ClassTeamUp+Dashboard)
 
 ## ✨ Features
 
