@@ -118,7 +118,9 @@ export default function SignUpForm() {
             id: authData.user.id,
             email: formData.email,
             full_name: formData.fullName,
-            role: formData.role
+            role: formData.role,
+            // Ensure instructors always have looking_for_team set to false
+            looking_for_team: formData.role === 'instructor' ? false : false
           })
 
         if (!insertError) {

@@ -35,6 +35,48 @@ export default async function StudentDashboard() {
     .single()
 
   const isLookingForTeam = profile?.looking_for_team || false;
+  const teamId = profile?.team_id || null;
+
+  // Fetch team information if the user is assigned to a team
+  let teamInfo = null;
+  let teamMembers: Array<{
+    id: string;
+    full_name?: string;
+    email?: string;
+    student_skills?: Array<{
+      skill_id: string;
+      proficiency_level: number;
+    }>;
+  }> = [];
+  
+  if (teamId) {
+    const { data: team } = await supabase
+      .from('teams')
+      .select('*')
+      .eq('id', teamId)
+      .single();
+    
+    if (team) {
+      teamInfo = team;
+      
+      // Fetch team members
+      if (team.members && team.members.length > 0) {
+        const { data: members } = await supabase
+          .from('users')
+          .select(`
+            id,
+            full_name,
+            email,
+            student_skills (skill_id, proficiency_level)
+          `)
+          .in('id', team.members);
+        
+        if (members) {
+          teamMembers = members;
+        }
+      }
+    }
+  }
 
   const { data: skills } = await supabase
     .from('student_skills')
@@ -91,6 +133,52 @@ export default async function StudentDashboard() {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Dashboard</h1>
+      
+      {/* Show Team Assignment if user is part of a team */}
+      {teamInfo && (
+        <Card className="p-6 mb-6 border-green-200 bg-green-50">
+          <div className="mb-4">
+            <h2 className="text-xl font-semibold text-gray-900 flex items-center">
+              <Users className="h-5 w-5 text-green-600 mr-2" />
+              Your Team: {teamInfo.name}
+            </h2>
+            <p className="text-gray-600 mt-1">
+              You've been assigned to a team! Here are your team members:
+            </p>
+          </div>
+          
+          <div className="space-y-3">
+            {teamMembers.map(member => (
+              <div key={member.id} className="flex items-start p-3 bg-white rounded-lg">
+                <div>
+                  <p className="font-medium text-gray-900">
+                    {member.full_name || 'Unnamed Student'}
+                    {member.id === session.user.id && (
+                      <span className="ml-2 text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full">
+                        You
+                      </span>
+                    )}
+                  </p>
+                  <p className="text-sm text-gray-500">{member.email}</p>
+                  
+                  {member.student_skills && member.student_skills.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {member.student_skills.map(skill => (
+                        <span 
+                          key={`${member.id}-${skill.skill_id}`}
+                          className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800"
+                        >
+                          {skill.skill_id} ({skill.proficiency_level})
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {/* Profile Completion Card */}
@@ -164,11 +252,25 @@ export default async function StudentDashboard() {
           </Card>
         </Link>
 
-        {/* Find Team Card */}
-        <TeamAvailabilityCard 
-          initialLookingForTeam={isLookingForTeam} 
-          isProfileComplete={completionPercentage === 100} 
-        />
+        {/* Find Team Card - only show if not already in a team */}
+        {!teamInfo ? (
+          <TeamAvailabilityCard 
+            initialLookingForTeam={isLookingForTeam} 
+            isProfileComplete={completionPercentage === 100} 
+          />
+        ) : (
+          <Link href={`/student-dashboard/team/${teamId}`} className="h-full">
+            <Card className="p-6 h-full flex flex-col justify-between hover:shadow-md transition-shadow border-green-200">
+              <div className="flex items-center space-x-3 mb-4">
+                <Users className="h-8 w-8 text-green-600" />
+                <h3 className="text-xl font-medium">View Team</h3>
+              </div>
+              <p className="text-sm text-gray-600">
+                View your team details and connect with your teammates
+              </p>
+            </Card>
+          </Link>
+        )}
 
         {/* Browse Students Card */}
         <BrowseStudentsCard completionPercentage={completionPercentage} />

@@ -52,11 +52,28 @@ export class TeamMatchingService {
         .eq('looking_for_team', true);
 
       if (error) throw error;
-      if (!students?.length) return [];
+      
+      // Handle the case where no students are available
+      if (!students?.length) {
+        console.log('No students available for team formation');
+        return [];
+      }
+
+      // Process and format the student data
+      const processedStudents = students.map(student => ({
+        ...student,
+        skills: student.student_skills
+      }));
 
       // Initialize teams array
       const teams: Student[][] = [];
-      let unassignedStudents = [...students];
+      let unassignedStudents = [...processedStudents];
+
+      // Check if we have enough students to form teams
+      if (unassignedStudents.length < criteria.minTeamSize) {
+        console.log('Not enough students to form teams of the minimum size');
+        return [];
+      }
 
       // Phase 1: Create initial teams based on optimal size
       while (unassignedStudents.length >= criteria.minTeamSize) {
@@ -80,6 +97,18 @@ export class TeamMatchingService {
           teams,
           criteria
         );
+      }
+
+      // Validate teams based on required skills if applicable
+      if (criteria.considerSkills) {
+        for (const team of teams) {
+          const isValid = await this.validateTeam(team, criteria);
+          if (!isValid) {
+            console.log('At least one team does not meet skill requirements');
+            // You can decide whether to return invalid teams or not
+            // For now, we'll return them and let the UI handle messaging
+          }
+        }
       }
 
       return teams;

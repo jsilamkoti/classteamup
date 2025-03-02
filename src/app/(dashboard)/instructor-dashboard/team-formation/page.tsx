@@ -293,7 +293,8 @@ export default function TeamFormationPage() {
       setLoading(true)
       const matchingService = new TeamMatchingService()
       
-      const teams = await matchingService.matchTeams({
+      // Create criteria based on formation rules
+      const criteria = {
         minTeamSize: formationRule.min_team_size,
         maxTeamSize: formationRule.max_team_size,
         considerSkills: true,
@@ -301,31 +302,90 @@ export default function TeamFormationPage() {
         considerProjectPreferences: true,
         considerAvailability: true,
         skillWeighting: formationRule.skill_distribution_rules.diversityWeight
-      })
+      };
+      
+      // Attempt to form teams
+      const teams = await matchingService.matchTeams(criteria);
 
+      // Handle case where no teams could be formed
+      if (teams.length === 0) {
+        if (availableStudents === 0) {
+          toast.error('No students are available for team formation');
+        } else if (availableStudents < formationRule.min_team_size) {
+          toast.error(`Not enough students for team formation. Need at least ${formationRule.min_team_size}.`);
+        } else {
+          toast.error('Unable to form teams with current criteria. Please adjust your rules.');
+        }
+        setLoading(false);
+        return;
+      }
+      
+      // Display formed teams in the UI before saving
+      setFormedTeams(teams);
+      
       // Save teams to database
+      const savedTeamIds = [];
       for (const team of teams) {
-        const { error } = await supabase
+        // Generate a readable team name with the course prefix
+        const teamNamePrefix = 'Team';
+        const teamNumber = Math.floor(Math.random() * 1000) + 1;
+        const teamName = `${teamNamePrefix} ${teamNumber}`;
+        
+        const { data, error } = await supabase
           .from('teams')
           .insert({
             course_id: formationRule.course_id,
-            name: `Team ${Math.random().toString(36).substr(2, 9)}`,
+            name: teamName,
             created_at: new Date().toISOString(),
             members: team.map(s => s.id)
           })
+          .select('id');
 
-        if (error) throw error
+        if (error) throw error;
+        if (data) savedTeamIds.push(data[0].id);
+        
+        // Update student status to not looking for team
+        for (const student of team) {
+          const { error: updateError } = await supabase
+            .from('users')
+            .update({
+              looking_for_team: false,
+              team_id: data ? data[0].id : null,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', student.id);
+          
+          if (updateError) {
+            console.error(`Failed to update student ${student.id} status:`, updateError);
+          }
+        }
       }
 
-      toast.success(`Successfully formed ${teams.length} teams`)
-      router.push('/instructor-dashboard/teams') // Redirect to teams page
-    } catch (error) {
-      console.error('Error forming teams:', error)
-      toast.error('Failed to form teams')
+      toast.success(`Successfully formed ${teams.length} teams`);
+      
+      // Create a toast with a link to the teams page
+      toast((t) => (
+        <div className="flex flex-col">
+          <span>Teams formed successfully!</span>
+          <button 
+            onClick={() => {
+              toast.dismiss(t.id);
+              router.push('/instructor-dashboard/teams');
+            }}
+            className="text-blue-600 font-medium mt-1 hover:underline"
+          >
+            View Teams
+          </button>
+        </div>
+      ), { duration: 5000 });
+      
+    } catch (error: any) {
+      console.error('Error forming teams:', error);
+      toast.error(`Failed to form teams: ${error.message || 'Unknown error'}`);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -554,44 +614,105 @@ export default function TeamFormationPage() {
         </div>
       </Card>
 
-      {/* Action Buttons */}
-      <div className="mt-8 flex justify-end space-x-4">
-        <Button
-          onClick={handleSaveRules}
-          disabled={isSaving}
-          className="flex items-center"
-        >
-          {isSaving ? (
-            <>
-              <Loader2 className="animate-spin -ml-1 mr-2 h-5 w-5" />
-              Saving...
-            </>
-          ) : (
-            <>
-              <Save className="-ml-1 mr-2 h-5 w-5" />
-              Save Rules
-            </>
-          )}
-        </Button>
+      {/* Formation Controls */}
+      <div className="mt-8 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <Button 
+              onClick={handleSaveRules} 
+              variant="outline" 
+              disabled={!validation.isValid || isSaving}
+              className="mr-4"
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4 mr-2" />
+                  Save Rules
+                </>
+              )}
+            </Button>
+          </div>
+          <Button
+            onClick={handleFormTeams}
+            disabled={
+              loading || 
+              availableStudents < formationRule.min_team_size || 
+              !validation.isValid
+            }
+          >
+            {loading ? (
+              <>
+                <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                Forming Teams...
+              </>
+            ) : (
+              <>
+                <Users className="h-5 w-5 mr-2" />
+                Form Teams Now
+              </>
+            )}
+          </Button>
+        </div>
 
-        <Button
-          onClick={handleFormTeams}
-          disabled={loading || availableStudents < formationRule.min_team_size}
-          className="flex items-center bg-indigo-600 text-white"
-        >
-          {loading ? (
-            <>
-              <Loader2 className="animate-spin -ml-1 mr-2 h-5 w-5" />
-              Forming Teams...
-            </>
-          ) : (
-            <>
-              <Users className="-ml-1 mr-2 h-5 w-5" />
-              Form Teams
-            </>
-          )}
-        </Button>
+        {availableStudents < formationRule.min_team_size && (
+          <div className="p-4 bg-yellow-50 border border-yellow-100 rounded-md">
+            <div className="flex">
+              <AlertCircle className="h-5 w-5 text-yellow-500" />
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-yellow-800">Not Enough Students</h3>
+                <p className="text-sm text-yellow-700 mt-1">
+                  Wait for at least {formationRule.min_team_size} students to be available before forming teams.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Formed Teams Display */}
+      {formedTeams.length > 0 && (
+        <div className="mt-12">
+          <h2 className="text-2xl font-semibold text-gray-900 mb-6">Formed Teams</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {formedTeams.map((team, teamIndex) => (
+              <Card key={teamIndex} className="p-6">
+                <h3 className="text-xl font-medium mb-4">Team {teamIndex + 1}</h3>
+                <div className="space-y-3">
+                  <p className="text-sm text-gray-500">Members: {team.length}</p>
+                  <ul className="divide-y">
+                    {team.map((student) => (
+                      <li key={student.id} className="py-2">
+                        <div className="flex items-center">
+                          <div className="flex-1">
+                            <p className="font-medium">{student.full_name || 'Unnamed Student'}</p>
+                            {student.skills && student.skills.length > 0 && (
+                              <div className="mt-1 flex flex-wrap gap-1">
+                                {student.skills.map((skill) => (
+                                  <span 
+                                    key={skill.skill_id} 
+                                    className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800"
+                                  >
+                                    {skill.skill_id} ({skill.proficiency_level})
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 } 
