@@ -188,7 +188,7 @@ Distributed under the MIT License. See `LICENSE` for more information.
 
 ## 📧 Contact
 
-Your Name - [your-gnanendraprasadgopi0615@gmail.com](mailto:gnanendraprasadgopi0615@gmail.com)
+Your Name - [gnanendraprasadgopi0615@gmail.com](mailto:gnanendraprasadgopi0615@gmail.com)
 
 Project Link: [https://github.com/GGP0615/classteamup](https://github.com/GGP0615/classteamup)
 
