@@ -33,7 +33,12 @@ export default function SignInForm() {
 
       if (signInError) {
         console.error('Sign in error:', signInError)
-        throw signInError
+        if (signInError.message.includes('rate limit')) {
+          setError('Too many login attempts. Please wait a few minutes and try again.')
+        } else {
+          setError(signInError.message)
+        }
+        return
       }
 
       console.log('Sign in successful:', data)
