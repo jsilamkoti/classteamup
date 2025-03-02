@@ -6,7 +6,7 @@
 
 ClassTeamUp is a modern web application designed to streamline the team formation process in educational settings. Built for instructors and students, it automatically creates optimal teams based on skills, preferences, and availability.
 
-![ClassTeamUp Dashboard](https://placeholder.com/dashboard-preview.png)
+![ClassTeamUp Dashboard](https://placehold.co/800x400?text=ClassTeamUp+Dashboard)
 
 ## ✨ Features
 
@@ -34,7 +34,7 @@ Before you begin, ensure you have the following installed:
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/classteamup.git
+git clone https://github.com/GGP0615/classteamup.git
 cd classteamup
 ```
 
@@ -188,10 +188,10 @@ Distributed under the MIT License. See `LICENSE` for more information.
 
 ## 📧 Contact
 
-Your Name - [your-email@example.com](mailto:your-email@example.com)
+Your Name - [your-gnanendraprasadgopi0615@gmail.com](mailto:gnanendraprasadgopi0615@gmail.com)
 
-Project Link: [https://github.com/yourusername/classteamup](https://github.com/yourusername/classteamup)
+Project Link: [https://github.com/GGP0615/classteamup](https://github.com/GGP0615/classteamup)
 
 ---
 
-Made with ❤️ by Your Name
+Made with ❤️ by G
