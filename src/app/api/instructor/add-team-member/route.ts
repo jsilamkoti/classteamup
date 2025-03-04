@@ -1,23 +1,87 @@
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 
+// Validate environment variables
+if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+  throw new Error('NEXT_PUBLIC_SUPABASE_URL is not defined');
+}
+
+if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  throw new Error('SUPABASE_SERVICE_ROLE_KEY is not defined');
+}
+
+// Create a Supabase client with the service role key
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY,
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  }
+);
+
 export async function POST(request: Request) {
   try {
+    // Validate request content type
+    const contentType = request.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      return new NextResponse(
+        JSON.stringify({ 
+          error: 'Invalid content type. Expected application/json' 
+        }), 
+        { 
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
+    }
+
     const requestData = await request.json();
     const { teamId, userId } = requestData;
     
     if (!teamId || !userId) {
-      return NextResponse.json({ error: 'Missing required fields: teamId or userId' }, { status: 400 });
+      return new NextResponse(
+        JSON.stringify({ 
+          error: 'Missing required teamId or userId' 
+        }), 
+        { 
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
     }
     
-    // Use the route handler client with server-side auth
+    // Use the route handler client
     const supabase = createRouteHandlerClient({ cookies });
     
     // Get the session to verify the user is authenticated and is an instructor
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError) {
+      return new NextResponse(
+        JSON.stringify({ 
+          error: 'Session error: ' + sessionError.message 
+        }), 
+        { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
+    }
+    
     if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return new NextResponse(
+        JSON.stringify({ 
+          error: 'Unauthorized - No session found' 
+        }), 
+        { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
     }
     
     // Fetch the user to verify their role
@@ -27,54 +91,127 @@ export async function POST(request: Request) {
       .eq('id', session.user.id)
       .single();
       
-    if (userError || !userData || userData.role !== 'instructor') {
-      return NextResponse.json({ error: 'Forbidden: Only instructors can add team members' }, { status: 403 });
+    if (userError) {
+      return new NextResponse(
+        JSON.stringify({ 
+          error: 'Error fetching user role: ' + userError.message 
+        }), 
+        { 
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
     }
     
-    // Create the member entry
-    const memberData = {
+    if (!userData || userData.role !== 'instructor') {
+      return new NextResponse(
+        JSON.stringify({ 
+          error: 'Forbidden: Only instructors can add team members' 
+        }), 
+        { 
+          status: 403,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
+    }
+
+    // Create team member with required fields
+    const teamMemberData = {
       team_id: teamId,
       user_id: userId,
-      joined_at: new Date().toISOString()
+      role: 'member'
     };
+
+    console.log('Attempting to add team member with data:', teamMemberData);
     
-    const { data: member, error: memberError } = await supabase
+    // Add the team member using admin client to bypass RLS
+    const { data: teamMember, error: teamMemberError } = await supabaseAdmin
       .from('team_members')
-      .insert(memberData)
+      .insert(teamMemberData)
       .select()
       .single();
       
-    if (memberError) {
-      console.error('Error adding team member:', memberError);
-      return NextResponse.json({ error: memberError.message }, { status: 500 });
-    }
-    
-    // Update the user's status to not looking for team
-    const { error: updateError } = await supabase
-      .from('users')
-      .update({
-        looking_for_team: false,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', userId);
-      
-    if (updateError) {
-      console.error('Error updating user status:', updateError);
-      return NextResponse.json({ 
-        warning: `Member added but failed to update their status: ${updateError.message}`,
-        member
+    if (teamMemberError) {
+      console.error('Error adding team member:', {
+        error: teamMemberError,
+        code: teamMemberError.code,
+        message: teamMemberError.message,
+        details: teamMemberError.details
       });
+      
+      return new NextResponse(
+        JSON.stringify({ 
+          error: teamMemberError.message,
+          code: teamMemberError.code,
+          details: teamMemberError.details
+        }), 
+        { 
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
     }
     
-    // Return success response
-    return NextResponse.json({ 
-      success: true, 
-      member,
-      message: 'Team member added successfully' 
-    });
+    if (!teamMember) {
+      return new NextResponse(
+        JSON.stringify({ 
+          error: 'Team member was not added' 
+        }), 
+        { 
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
+    }
+
+    // Update the user's looking_for_team status using admin client
+    const { error: updateError } = await supabaseAdmin
+      .from('users')
+      .update({ looking_for_team: false })
+      .eq('id', userId);
+
+    if (updateError) {
+      console.log('Warning: Failed to update user status:', updateError);
+    }
+    
+    return new NextResponse(
+      JSON.stringify({ 
+        success: true, 
+        teamMember,
+        message: 'Team member added successfully' 
+      }), 
+      { 
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    );
     
   } catch (error: any) {
     console.error('Unexpected error in add-team-member API:', error);
-    return NextResponse.json({ error: error.message || 'Unknown error' }, { status: 500 });
+    
+    // Check if the error is related to parsing JSON
+    if (error instanceof SyntaxError && error.message.includes('Unexpected token')) {
+      return new NextResponse(
+        JSON.stringify({ 
+          error: 'Invalid JSON in request body',
+          details: error.message
+        }), 
+        { 
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
+    }
+    
+    return new NextResponse(
+      JSON.stringify({ 
+        error: error.message || 'Unknown error',
+        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      }), 
+      { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    );
   }
 } 
