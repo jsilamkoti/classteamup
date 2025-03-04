@@ -16,9 +16,10 @@ interface TeamMember {
   full_name: string
   email: string
   role: string
-  academic_level: string
+  bio: string | null
+  avatar_url: string | null
   team_role: string
-  skills: Skill[]
+  joined_at: string
 }
 
 interface Team {
@@ -27,8 +28,11 @@ interface Team {
   description: string
   course_id: string
   created_at: string
-  visibility: string
+  updated_at: string
   status: string
+  team_lead_id: string
+  max_members: number
+  created_by: string
   members: TeamMember[]
 }
 
@@ -51,51 +55,73 @@ export default function TeamsList({ userRole, courseId }: TeamsListProps) {
   const loadTeams = async () => {
     try {
       console.log('Starting to load teams...');
-      setLoading(true)
-      setError(null)
+      setLoading(true);
+      setError(null);
 
       // First check authentication
-      const { data: { session }, error: authError } = await supabase.auth.getSession()
+      const { data: { session }, error: authError } = await supabase.auth.getSession();
       if (authError) {
         console.error('Auth error:', authError);
-        throw new Error('Authentication failed')
+        throw new Error('Authentication failed: ' + authError.message);
       }
       if (!session) {
         console.error('No session found');
-        throw new Error('Not authenticated')
+        throw new Error('Please log in to view teams');
       }
 
       console.log('Making API request to /api/teams...');
       const response = await fetch('/api/teams', {
+        method: 'GET',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
         },
-        credentials: 'include'
+        credentials: 'include',
+        cache: 'no-store'
       });
 
       console.log('API response status:', response.status);
-      const data = await response.json()
-      console.log('API response data:', data);
-
-      if (!response.ok) {
-        throw new Error(data.error || data.details || 'Failed to fetch teams')
+      
+      let data;
+      try {
+        const text = await response.text(); // Get response as text first
+        console.log('Raw response:', text);
+        data = JSON.parse(text); // Then parse it
+      } catch (parseError) {
+        console.error('Error parsing response:', parseError);
+        throw new Error('Invalid response from server');
       }
 
-      let filteredTeams = data.teams || []
-      console.log('Filtered teams:', filteredTeams);
+      if (!response.ok) {
+        console.error('API error response:', data);
+        throw new Error(data?.error || data?.details || `HTTP error ${response.status}`);
+      }
+
+      if (!data || !Array.isArray(data.teams)) {
+        console.error('Invalid response format:', data);
+        throw new Error('Invalid response format from API');
+      }
+
+      let filteredTeams = data.teams;
+      console.log('Teams received:', filteredTeams.length);
 
       // If courseId is provided, filter teams for that course
       if (courseId) {
-        filteredTeams = filteredTeams.filter((team: Team) => team.course_id === courseId)
-        console.log('Teams filtered by course:', filteredTeams);
+        filteredTeams = filteredTeams.filter((team: Team) => team.course_id === courseId);
+        console.log('Teams filtered by course:', filteredTeams.length);
       }
 
-      setTeams(filteredTeams)
+      setTeams(filteredTeams);
     } catch (err: any) {
-      console.error('Full error details:', err)
-      setError(err.message || 'Failed to load teams')
+      console.error('Full error details:', err);
+      setError(err.message || 'Failed to load teams');
+      // If it's an authentication error, redirect to login
+      if (err.message.includes('Please log in') || err.message.includes('Authentication failed')) {
+        // You might want to redirect to login page here
+        console.log('User needs to log in');
+      }
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
   }
 
@@ -183,7 +209,7 @@ export default function TeamsList({ userRole, courseId }: TeamsListProps) {
 
             <div className="flex items-center mt-4 text-sm text-gray-500">
               <Users className="h-4 w-4 mr-2" />
-              <span>{team.members.length} members</span>
+              <span>{team.members.length}/{team.max_members} members</span>
               <span className="mx-2">•</span>
               <span className="capitalize">{team.status}</span>
             </div>
@@ -199,30 +225,36 @@ export default function TeamsList({ userRole, courseId }: TeamsListProps) {
                     className="bg-white p-4 rounded-lg shadow-sm"
                   >
                     <div className="flex justify-between items-start">
-                      <div>
-                        <h5 className="text-sm font-medium text-gray-900">
-                          {member.full_name}
-                        </h5>
-                        {userRole === 'instructor' && (
-                          <p className="text-sm text-gray-500">{member.email}</p>
+                      <div className="flex items-center">
+                        {member.avatar_url && (
+                          <img 
+                            src={member.avatar_url} 
+                            alt={member.full_name}
+                            className="h-8 w-8 rounded-full mr-3"
+                          />
                         )}
+                        <div>
+                          <h5 className="text-sm font-medium text-gray-900">
+                            {member.full_name}
+                            {team.team_lead_id === member.id && (
+                              <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded">
+                                Team Lead
+                              </span>
+                            )}
+                          </h5>
+                          {userRole === 'instructor' && (
+                            <p className="text-sm text-gray-500">{member.email}</p>
+                          )}
+                        </div>
                       </div>
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
                         {member.team_role}
                       </span>
                     </div>
 
-                    <div className="mt-2">
-                      <div className="flex items-center text-sm text-gray-500 mb-2">
-                        <Book className="h-4 w-4 mr-2" />
-                        {member.academic_level}
-                      </div>
-                      {member.skills.length > 0 && (
-                        <div className="flex flex-wrap gap-1">
-                          {member.skills.map(renderSkillBadge)}
-                        </div>
-                      )}
-                    </div>
+                    {member.bio && (
+                      <p className="mt-2 text-sm text-gray-600">{member.bio}</p>
+                    )}
                   </div>
                 ))}
               </div>
