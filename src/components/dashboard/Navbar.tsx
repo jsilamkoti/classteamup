@@ -7,6 +7,7 @@ import Image from 'next/image'
 import { Menu, Bell, Settings, LogOut, Loader2 } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { useProfileStore } from '@/store/useProfileStore'
+import Link from 'next/link'
 
 interface NavbarProps {
   user?: {
@@ -60,8 +61,8 @@ export default function Navbar({ user }: NavbarProps) {
           <div className="flex justify-between h-16">
             <div className="flex-shrink-0 flex items-center">
               <Image
-                src="/logo.png"
-                alt="ClassTeamUp"
+                src="/CTU.svg"
+                alt="ClassTeamUp Logo"
                 width={40}
                 height={40}
                 className="h-8 w-auto"
@@ -99,8 +100,8 @@ export default function Navbar({ user }: NavbarProps) {
             </button>
             <div className="flex-shrink-0 flex items-center">
               <Image
-                src="/logo.png"
-                alt="ClassTeamUp"
+                src="/CTU.svg"
+                alt="ClassTeamUp Logo"
                 width={40}
                 height={40}
                 className="h-8 w-auto"
