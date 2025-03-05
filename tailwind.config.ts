@@ -9,6 +9,9 @@ export default {
   theme: {
     extend: {
       colors: {
+        teal: '#008080',
+        aqua: '#00FFFF',
+        turquoise: '#40E0D0',
         background: "var(--background)",
         foreground: "var(--foreground)",
       },

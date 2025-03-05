@@ -7,6 +7,7 @@ import Image from 'next/image'
 import { Menu, Bell, Settings, LogOut, Loader2 } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { useProfileStore } from '@/store/useProfileStore'
+import logo from '/public/logo.svg';
 
 interface NavbarProps {
   user?: {
@@ -55,12 +56,12 @@ export default function Navbar({ user }: NavbarProps) {
   // If no user, show loading state or minimal navbar
   if (!user) {
     return (
-      <nav className="bg-white shadow-sm">
+      <nav className="bg-gradient-to-r from-[#18A5A7] to-[#BFFFE9] shadow-sm text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex-shrink-0 flex items-center">
               <Image
-                src="/logo.png"
+                src="/logo.svg"
                 alt="ClassTeamUp"
                 width={40}
                 height={40}
@@ -77,7 +78,7 @@ export default function Navbar({ user }: NavbarProps) {
     try {
       const { error } = await supabase.auth.signOut()
       if (error) throw error
-      
+
       toast.success('Signed out successfully')
       router.replace('/auth/signin')
     } catch (error) {
@@ -87,7 +88,7 @@ export default function Navbar({ user }: NavbarProps) {
   }
 
   return (
-    <nav className="bg-white shadow-sm">
+    <nav className="bg-gradient-to-r from-[#18A5A7] to-[#BFFFE9] shadow-sm text-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           <div className="flex">
@@ -99,7 +100,7 @@ export default function Navbar({ user }: NavbarProps) {
             </button>
             <div className="flex-shrink-0 flex items-center">
               <Image
-                src="/logo.png"
+                src="/logo.svg"
                 alt="ClassTeamUp"
                 width={40}
                 height={40}
@@ -109,13 +110,13 @@ export default function Navbar({ user }: NavbarProps) {
           </div>
 
           <div className="flex items-center">
-            <button className="p-2 rounded-full hover:bg-gray-100">
+            <button className="p-2 rounded-full hover:bg-opacity-80 text-white">
               <Bell className="h-6 w-6" />
-            </button>
+            </button>**
 
             <div className="ml-3 relative">
               <button
-                className="flex items-center rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                className="flex items-center rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 text-white"
                 onClick={() => setIsProfileOpen(!isProfileOpen)}
               >
                 <span className="sr-only">Open user menu</span>
@@ -135,7 +136,7 @@ export default function Navbar({ user }: NavbarProps) {
                       }}
                     />
                   ) : (
-                    <div className="h-full w-full bg-indigo-600 flex items-center justify-center transition-colors">
+                    <div className="h-full w-full bg-indigo-600 flex items-center justify-center transition-colors text-white">
                       <span className="text-sm font-medium text-white">
                         {user.full_name[0]?.toUpperCase()}
                       </span>
@@ -145,8 +146,8 @@ export default function Navbar({ user }: NavbarProps) {
               </button>
 
               {isProfileOpen && (
-                <div 
-                  className="absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50"
+                <div
+                  className="absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50 text-gray-700"
                   style={{
                     minWidth: '200px',
                     maxWidth: '280px'
@@ -188,4 +189,4 @@ const styles = `
   height: 32px; /* Same as w-8 */
   display: inline-block;
 }
-` 
+`
