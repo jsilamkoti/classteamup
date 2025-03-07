@@ -16,7 +16,7 @@ export async function POST(request: Request) {
     const supabase = createRouteHandlerClient({ cookies });
     
     const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/update-password`,
+      redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/update-password`,
     });
 
     if (error) {

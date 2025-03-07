@@ -879,25 +879,31 @@ export default function TeamFormationPage() {
           <h2 className="text-xl font-medium mb-4">Team Diversity</h2>
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 Diversity Weight: {formationRule.skill_distribution_rules.diversityWeight}
               </label>
-              <input
-                type="range"
-                min={0}
-                max={1}
-                step={0.1}
-                value={formationRule.skill_distribution_rules.diversityWeight}
-                onChange={(e) => setFormationRule(prev => ({
-                  ...prev,
-                  skill_distribution_rules: {
-                    ...prev.skill_distribution_rules,
-                    diversityWeight: parseFloat(e.target.value)
-                  }
-                }))}
-                className="mt-2 w-full"
-              />
-              <p className="mt-1 text-sm text-gray-500">
+              <div className="relative">
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.1}
+                  value={formationRule.skill_distribution_rules.diversityWeight}
+                  onChange={(e) => setFormationRule(prev => ({
+                    ...prev,
+                    skill_distribution_rules: {
+                      ...prev.skill_distribution_rules,
+                      diversityWeight: parseFloat(e.target.value)
+                    }
+                  }))}
+                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                />
+                <div className="mt-1 flex justify-between text-xs text-gray-500">
+                  <span>Low Diversity</span>
+                  <span>High Diversity</span>
+                </div>
+              </div>
+              <p className="mt-2 text-sm text-gray-500">
                 Higher values prioritize skill diversity in teams
               </p>
             </div>
@@ -926,11 +932,11 @@ export default function TeamFormationPage() {
       <div className="mt-8 space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <Button 
-              onClick={handleSaveRules} 
-              variant="outline" 
+            <Button
+              onClick={handleSaveRules}
+              variant="secondary"
               disabled={!validation.isValid || isSaving}
-              className="mr-4"
+              className="mr-4 shadow-sm"
             >
               {isSaving ? (
                 <>
@@ -961,11 +967,8 @@ export default function TeamFormationPage() {
           </div>
           <Button
             onClick={handleFormTeams}
-            disabled={
-              loading || 
-              availableStudents < formationRule.min_team_size || 
-              !validation.isValid
-            }
+            variant="action"
+            disabled={!validation.isValid || loading || availableStudents < formationRule.min_team_size}
           >
             {loading ? (
               <>

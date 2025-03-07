@@ -1,15 +1,9 @@
 'use client'
 
-import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Users, Layers, Home } from 'lucide-react'
+import { Users, Home, Settings, UserCircle, Search } from 'lucide-react'
 import { cn } from '@/lib/utils'
-
-const navigation = [
-  { name: 'Dashboard', href: '/student-dashboard', icon: Home },
-  { name: 'My Team', href: '/student-dashboard/view-teams', icon: Users },
-]
 
 export default function StudentDashboardLayout({
   children,
@@ -18,49 +12,74 @@ export default function StudentDashboardLayout({
 }) {
   const pathname = usePathname()
 
-  return (
-    <div className="min-h-screen bg-gray-100">
-      <nav className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex items-center justify-between w-full">
-              <Link 
-                href="/student-dashboard"
-                className="flex-shrink-0 flex items-center hover:opacity-75 transition-opacity"
-              >
-                <Layers className="h-8 w-8 text-indigo-600" />
-                <span className="ml-2 text-2xl font-bold text-gray-900">ClassTeamUp</span>
-              </Link>
-              <div className="flex space-x-4">
-                {navigation.map((item) => {
-                  const isActive = pathname === item.href
-                  return (
-                    <Link
-                      key={item.name}
-                      href={item.href}
-                      className={cn(
-                        'inline-flex items-center px-4 py-2 rounded-md text-sm font-medium transition-colors',
-                        isActive
-                          ? 'bg-indigo-100 text-indigo-700'
-                          : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                      )}
-                    >
-                      <item.icon className="h-5 w-5 mr-2" />
-                      {item.name}
-                    </Link>
-                  )
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-      </nav>
+  const isActive = (path: string) => {
+    return pathname === path || pathname.startsWith(`${path}/`)
+  }
 
-      <main className="py-6">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+  return (
+    <div className="flex h-[calc(100vh-4rem)]">
+      {/* Sidebar Navigation */}
+      <div className="w-64 bg-white shadow-sm h-full">
+        <nav className="p-4 space-y-1">
+          <Link 
+            href="/dashboard" 
+            className={cn(
+              "flex items-center px-3 py-2 text-sm font-medium rounded-md hover:bg-gray-100",
+              isActive('/dashboard') ? "text-indigo-600 bg-indigo-50" : "text-gray-700"
+            )}
+          >
+            <Home className={cn("mr-3 h-5 w-5", isActive('/dashboard') ? "text-indigo-500" : "text-gray-500")} />
+            Dashboard Home
+          </Link>
+          <Link 
+            href="/student-dashboard/profile" 
+            className={cn(
+              "flex items-center px-3 py-2 text-sm font-medium rounded-md hover:bg-gray-100",
+              isActive('/student-dashboard/profile') ? "text-indigo-600 bg-indigo-50" : "text-gray-700"
+            )}
+          >
+            <UserCircle className={cn("mr-3 h-5 w-5", isActive('/student-dashboard/profile') ? "text-indigo-500" : "text-gray-500")} />
+            My Profile
+          </Link>
+          <Link 
+            href="/student-dashboard/my-team" 
+            className={cn(
+              "flex items-center px-3 py-2 text-sm font-medium rounded-md hover:bg-gray-100",
+              isActive('/student-dashboard/my-team') ? "text-indigo-600 bg-indigo-50" : "text-gray-700"
+            )}
+          >
+            <Users className={cn("mr-3 h-5 w-5", isActive('/student-dashboard/my-team') ? "text-indigo-500" : "text-gray-500")} />
+            View Team
+          </Link>
+          <Link 
+            href="/student-dashboard/browse" 
+            className={cn(
+              "flex items-center px-3 py-2 text-sm font-medium rounded-md hover:bg-gray-100",
+              isActive('/student-dashboard/browse') ? "text-indigo-600 bg-indigo-50" : "text-gray-700"
+            )}
+          >
+            <Search className={cn("mr-3 h-5 w-5", isActive('/student-dashboard/browse') ? "text-indigo-500" : "text-gray-500")} />
+            Browse Students
+          </Link>
+          <Link 
+            href="/settings/profile" 
+            className={cn(
+              "flex items-center px-3 py-2 text-sm font-medium rounded-md hover:bg-gray-100",
+              isActive('/settings/profile') ? "text-indigo-600 bg-indigo-50" : "text-gray-700"
+            )}
+          >
+            <Settings className={cn("mr-3 h-5 w-5", isActive('/settings/profile') ? "text-indigo-500" : "text-gray-500")} />
+            Settings
+          </Link>
+        </nav>
+      </div>
+      
+      {/* Main Content */}
+      <div className="flex-1 overflow-auto bg-gray-50">
+        <main className="py-6 px-6">
           {children}
-        </div>
-      </main>
+        </main>
+      </div>
     </div>
   )
 } 

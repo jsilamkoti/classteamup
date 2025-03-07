@@ -2,6 +2,58 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Global transition styles */
+* {
+  transition-property: background-color, border-color, color, fill, stroke, opacity, box-shadow, transform;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+
+/* Page transition wrapper */
+.page-transition-wrapper {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Card hover effects */
+.card-hover {
+  @apply transition-all duration-200 hover:shadow-md;
+}
+
+/* Consistent spacing */
+.content-spacing {
+  @apply px-4 py-4 sm:px-6 sm:py-6 md:px-8;
+}
+
+/* Sidebar active state */
+.sidebar-item-active {
+  @apply bg-indigo-50 text-indigo-600;
+}
+
+/* Sidebar inactive state */
+.sidebar-item-inactive {
+  @apply text-gray-700 hover:bg-gray-100 hover:text-gray-900;
+}
+
+/* Consistent button styles */
+.btn {
+  @apply px-4 py-2 rounded-md font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2;
+}
+
+.btn-primary {
+  @apply bg-indigo-600 text-white hover:bg-indigo-700 focus:ring-indigo-500;
+}
+
+.btn-secondary {
+  @apply bg-gray-200 text-gray-900 hover:bg-gray-300 focus:ring-gray-500;
+}
+
 :root {
   --background: #ffffff;
   --foreground: #171717;

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
@@ -24,6 +24,7 @@ export default function Navbar({ user }: NavbarProps) {
   const router = useRouter()
   const supabase = createClient()
   const { avatarUrl, updateAvatarUrl, isLoading, setLoading } = useProfileStore()
+  const profileRef = useRef<HTMLDivElement>(null)
 
   // Add this useEffect to load the avatar URL on mount
   useEffect(() => {
@@ -52,6 +53,20 @@ export default function Navbar({ user }: NavbarProps) {
 
     loadProfileImage()
   }, [user?.id]) // Depend on user.id to reload if user changes
+
+  // Add click outside handler
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
+        setIsProfileOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [])
 
   // If no user, show loading state or minimal navbar
   if (!user) {
@@ -92,13 +107,7 @@ export default function Navbar({ user }: NavbarProps) {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           <div className="flex">
-            <button
-              className="md:hidden px-4 inline-flex items-center"
-              onClick={() => setIsMenuOpen(!isMenuOpen)}
-            >
-              <Menu className="h-6 w-6" />
-            </button>
-            <div className="flex-shrink-0 flex items-center">
+            <Link href="/dashboard" className="flex-shrink-0 flex items-center">
               <Image
                 src="/CTU.svg"
                 alt="ClassTeamUp Logo"
@@ -106,15 +115,17 @@ export default function Navbar({ user }: NavbarProps) {
                 height={40}
                 className="h-8 w-auto"
               />
-            </div>
+              <span className="ml-2 text-lg font-semibold text-gray-900 hidden sm:block">ClassTeamUp</span>
+            </Link>
           </div>
 
           <div className="flex items-center">
-            <button className="p-2 rounded-full hover:bg-gray-100">
-              <Bell className="h-6 w-6" />
+            <button className="p-2 rounded-full hover:bg-gray-100 relative group">
+              <Bell className="h-6 w-6 text-gray-500" />
+              <span className="absolute top-0 right-0 h-2 w-2 rounded-full bg-red-500 group-hover:animate-pulse"></span>
             </button>
 
-            <div className="ml-3 relative">
+            <div className="ml-3 relative" ref={profileRef}>
               <button
                 className="flex items-center rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                 onClick={() => setIsProfileOpen(!isProfileOpen)}
@@ -159,7 +170,10 @@ export default function Navbar({ user }: NavbarProps) {
                       <p className="text-gray-500 truncate">{user.email}</p>
                     </div>
                     <button
-                      onClick={() => router.push('/settings/profile')}
+                      onClick={() => {
+                        setIsProfileOpen(false);
+                        router.push('/settings/profile');
+                      }}
                       className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
                     >
                       <Settings className="h-4 w-4 mr-2" />
