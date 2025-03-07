@@ -35,69 +35,99 @@ export default function BrowseStudentsPage() {
   const [skills, setSkills] = useState<Skill[]>([])
   const [selectedSkill, setSelectedSkill] = useState<string>('')
   const [error, setError] = useState<string | null>(null)
+  const [debugInfo, setDebugInfo] = useState<string[]>([])
 
   useEffect(() => {
     async function loadStudents() {
       try {
         setLoading(true)
-        console.log('Loading browse students data')
-
+        addDebug('Starting to load students data')
+        
         // Get current user
         const { data: { user }, error: userError } = await supabase.auth.getUser()
         
         if (userError) {
           console.error('Auth error:', userError.message)
-          setError('Authentication error')
+          setError('Authentication error: ' + userError.message)
+          addDebug(`Auth error: ${userError.message}`)
           return
         }
 
+        addDebug(`Current user: ${user?.id}`)
+
         // First load all available skills for filtering
-        const { data: skillsData } = await supabase
+        const { data: skillsData, error: skillsError } = await supabase
           .from('skills')
           .select('id, name, category')
           .order('category')
           .order('name')
         
-        if (skillsData) {
-          setSkills(skillsData)
+        if (skillsError) {
+          addDebug(`Skills error: ${skillsError.message}`)
+        } else {
+          addDebug(`Loaded ${skillsData?.length || 0} skills`)
+          setSkills(skillsData || [])
         }
 
-        // Fetch students with their skills
+        // Fetch all students except current user
+        addDebug('Fetching students')
         const { data: studentsData, error: studentsError } = await supabase
-          .from('profiles')
-          .select(`
-            id,
-            full_name,
-            email,
-            bio,
-            looking_for_team,
-            student_skills (
+          .from('users')
+          .select('id, full_name, email, bio, looking_for_team')
+          .eq('role', 'student')
+          .neq('id', user?.id)
+        
+        if (studentsError) {
+          console.error('Error fetching students:', studentsError)
+          setError('Could not load student data: ' + studentsError.message)
+          addDebug(`Student fetch error: ${studentsError.message}`)
+          return
+        }
+
+        addDebug(`Loaded ${studentsData?.length || 0} students`)
+        
+        // For each student, fetch their skills separately
+        const studentsWithSkills = []
+        
+        for (const student of (studentsData || [])) {
+          addDebug(`Loading skills for student ${student.id}`)
+          
+          const { data: studentSkills, error: skillsError } = await supabase
+            .from('student_skills')
+            .select(`
+              proficiency_level,
               skill:skills (
                 id,
                 name,
                 category
-              ),
-              proficiency_level
-            )
-          `)
-          .eq('role', 'student')
-          .neq('id', user?.id) // Don't show current user
-          .eq('looking_for_team', true) // Only show students looking for a team
+              )
+            `)
+            .eq('user_id', student.id)
           
-        if (studentsError) {
-          console.error('Error fetching students:', studentsError)
-          setError('Could not load student data')
-          return
+          if (skillsError) {
+            addDebug(`Error loading skills for ${student.id}: ${skillsError.message}`)
+          }
+          
+          studentsWithSkills.push({
+            ...student,
+            student_skills: studentSkills || []
+          })
         }
-
-        console.log('Loaded students:', studentsData?.length || 0)
-        setStudents(studentsData || [])
+        
+        addDebug('Finished loading all students with skills')
+        setStudents(studentsWithSkills)
       } catch (err) {
         console.error('Unexpected error:', err)
-        setError('Failed to load students')
+        setError('Failed to load students: ' + (err instanceof Error ? err.message : String(err)))
+        addDebug(`Unexpected error: ${err instanceof Error ? err.message : String(err)}`)
       } finally {
         setLoading(false)
       }
+    }
+
+    function addDebug(message: string) {
+      console.log(message)
+      setDebugInfo(prev => [...prev, message])
     }
 
     loadStudents()
@@ -114,11 +144,14 @@ export default function BrowseStudentsPage() {
         s => s.skill.id === selectedSkill
       ))
     
-    return matchesSearch && matchesSkill
+    // Only include students who are looking for a team
+    const isLookingForTeam = student.looking_for_team === true
+    
+    return matchesSearch && matchesSkill && isLookingForTeam
   })
 
   return (
-    <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 py-8">
+    <div className="w-full mx-auto px-4 sm:px-6 py-8">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-900 mb-4 sm:mb-0">Browse Students</h1>
         
@@ -185,6 +218,16 @@ export default function BrowseStudentsPage() {
             <h3 className="text-xl font-medium text-gray-900 mb-2">Error Loading Students</h3>
             <p className="text-red-500 text-center mb-4">{error}</p>
             <Button onClick={() => window.location.reload()}>Try Again</Button>
+            
+            {/* Debug information */}
+            <div className="mt-6 w-full max-w-xl">
+              <details>
+                <summary className="text-sm text-gray-500 cursor-pointer">Show debug information</summary>
+                <pre className="mt-2 p-3 text-xs bg-gray-100 rounded-md overflow-x-auto whitespace-pre-wrap">
+                  {debugInfo.join('\n')}
+                </pre>
+              </details>
+            </div>
           </div>
         </Card>
       ) : filteredStudents.length === 0 ? (
@@ -245,8 +288,10 @@ export default function BrowseStudentsPage() {
                 )}
               </div>
               
-              <Link href={`/student-profile/${student.id}`} passHref>
-                <Button fullWidth variant="primary">View Profile</Button>
+              <Link href={`/student-dashboard/profile/${student.id}`} passHref>
+                <Button variant="primary" fullWidth className="mt-2">
+                  View Profile
+                </Button>
               </Link>
             </Card>
           ))}

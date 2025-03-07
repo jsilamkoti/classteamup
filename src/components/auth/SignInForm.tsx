@@ -167,7 +167,7 @@ export default function SignInForm() {
               />
               <div className="mt-2 text-right">
                 <Link
-                  href="/auth/forgot-password"
+                  href="/forgot-password"
                   className="text-sm text-indigo-600 hover:text-indigo-500"
                 >
                   Forgot your password?
@@ -195,7 +195,7 @@ export default function SignInForm() {
 
         <div className="text-center">
           <Link
-            href="/auth/signup"
+            href="/signup"
             className="text-indigo-600 hover:text-indigo-500"
           >
             Don't have an account? Sign up

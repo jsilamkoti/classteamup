@@ -1,13 +1,16 @@
-import { createServerClient } from '@/lib/supabase-server'
+import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
+import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import Navbar from '@/components/dashboard/Navbar'
+
+export const dynamic = 'force-dynamic'
 
 export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const supabase = createServerClient()
+  const supabase = createServerComponentClient({ cookies })
   
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
@@ -26,9 +29,9 @@ export default async function DashboardLayout({
   }
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="min-h-screen bg-gray-50">
       <Navbar user={userProfile} />
-      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+      <main className="w-full mx-auto">
         {children}
       </main>
     </div>
