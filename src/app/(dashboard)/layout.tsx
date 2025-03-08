@@ -2,6 +2,7 @@ import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import Navbar from '@/components/dashboard/Navbar'
+import { Bell } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
 
