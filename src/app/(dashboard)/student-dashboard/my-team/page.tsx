@@ -1,7 +1,7 @@
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { Card } from '@/components/ui/Card'
-import { Users, Award, Mail, Briefcase, Sparkles, Star } from 'lucide-react'
+import { Users, Award, Mail, Briefcase, Sparkles } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
 
@@ -85,38 +85,112 @@ export default async function MyTeamPage() {
             .single()
           
           if (userData) {
-            console.log("Processing user:", userData.full_name);
+            // Create an array to hold the processed skills
+            let processedSkills: Skill[] = [];
             
-            // Add hardcoded skills for demonstration based on database screenshot
-            const hardcodedSkills: Record<string, Array<{name: string; category: string; proficiency_level: number}>> = {
-              "Gnanendra Prasad Gopi": [
-                { name: "Node.js", category: "Backend", proficiency_level: 1 },
-                { name: "UI/UX Design", category: "Design", proficiency_level: 1 },
-                { name: "Project Management", category: "Management", proficiency_level: 1 },
-                { name: "Python", category: "Programming", proficiency_level: 4 },
-                { name: "Team Leadership", category: "Soft Skills", proficiency_level: 1 }
-              ],
-              "Jahnavi S": [
-                { name: "React", category: "Frontend", proficiency_level: 3 },
-                { name: "Java", category: "Programming", proficiency_level: 4 },
-                { name: "Database Design", category: "Backend", proficiency_level: 2 }
-              ]
-            };
-
-            // For debugging purposes, let's just use the hardcoded skills directly
-            const userName = userData.full_name as string;
-            const skillsForUser = hardcodedSkills[userName] || [];
+            // Try multiple approaches to get the skills data
             
-            // Convert to the correct format expected by the interface
-            const processedSkills: Skill[] = skillsForUser.map(skill => ({
-              skill: {
-                name: skill.name,
-                category: skill.category
-              },
-              proficiency_level: skill.proficiency_level
-            }));
+            // Approach 1: Try student_skills table with direct join to skills
+            const { data: skillsData, error: skillsError } = await supabase
+              .from('student_skills')
+              .select(`
+                proficiency_level,
+                skills (
+                  name,
+                  category
+                )
+              `)
+              .eq('user_id', userData.id);
+              
+            if (skillsData && skillsData.length > 0 && !skillsError) {
+              console.log(`Found ${skillsData.length} skills via approach 1 for ${userData.full_name}`);
+              
+              for (const skill of skillsData) {
+                if (skill.skills) {
+                  // Use type assertion to handle TypeScript errors
+                  const skillInfo = skill.skills as { name?: string; category?: string };
+                  processedSkills.push({
+                    skill: {
+                      name: skillInfo.name || 'Unknown',
+                      category: skillInfo.category || 'Unknown'
+                    },
+                    proficiency_level: skill.proficiency_level || 1
+                  });
+                }
+              }
+            } else {
+              // Approach 2: Try with a different field name convention
+              const { data: skillsData2, error: skillsError2 } = await supabase
+                .from('student_skills')
+                .select(`
+                  proficiency_level,
+                  skill:skills (
+                    name,
+                    category
+                  )
+                `)
+                .eq('user_id', userData.id);
+                
+              if (skillsData2 && skillsData2.length > 0 && !skillsError2) {
+                console.log(`Found ${skillsData2.length} skills via approach 2 for ${userData.full_name}`);
+                
+                for (const skill of skillsData2) {
+                  if (skill.skill) {
+                    // Handle either array or object
+                    const skillInfo = Array.isArray(skill.skill) ? skill.skill[0] : skill.skill;
+                    
+                    if (skillInfo) {
+                      processedSkills.push({
+                        skill: {
+                          name: skillInfo.name || 'Unknown',
+                          category: skillInfo.category || 'Unknown'
+                        },
+                        proficiency_level: skill.proficiency_level || 1
+                      });
+                    }
+                  }
+                }
+              } else {
+                // Approach 3: Try the skill_id approach with a join
+                const { data: skillsData3, error: skillsError3 } = await supabase
+                  .from('student_skills')
+                  .select(`
+                    skill_id,
+                    proficiency_level
+                  `)
+                  .eq('user_id', userData.id);
+                  
+                if (skillsData3 && skillsData3.length > 0 && !skillsError3) {
+                  console.log(`Found ${skillsData3.length} skill IDs for ${userData.full_name}, fetching skill details`);
+                  
+                  // Get the skill details for each skill_id
+                  for (const skill of skillsData3) {
+                    if (skill.skill_id) {
+                      const { data: skillDetail } = await supabase
+                        .from('skills')
+                        .select('name, category')
+                        .eq('id', skill.skill_id)
+                        .single();
+                        
+                      if (skillDetail) {
+                        processedSkills.push({
+                          skill: {
+                            name: skillDetail.name || 'Unknown',
+                            category: skillDetail.category || 'Unknown'
+                          },
+                          proficiency_level: skill.proficiency_level || 1
+                        });
+                      }
+                    }
+                  }
+                } else {
+                  console.log(`No skills found for ${userData.full_name} in the database`);
+                }
+              }
+            }
             
-            console.log(`Using ${processedSkills.length} skills for ${userData.full_name}`);
+            // Get total number of skills found
+            console.log(`Total skills found for ${userData.full_name}: ${processedSkills.length}`);
             
             teamMembers.push({
               user: {
@@ -145,18 +219,6 @@ export default async function MyTeamPage() {
       case 4: return "Advanced";
       case 5: return "Expert";
       default: return "Unspecified";
-    }
-  };
-
-  // Function to get background color based on skill level
-  const getSkillLevelColor = (level: number) => {
-    switch (level) {
-      case 1: return "bg-blue-100 text-blue-800";
-      case 2: return "bg-teal-100 text-teal-800";
-      case 3: return "bg-purple-100 text-purple-800";
-      case 4: return "bg-orange-100 text-orange-800";
-      case 5: return "bg-red-100 text-red-800";
-      default: return "bg-gray-100 text-gray-800";
     }
   };
 
