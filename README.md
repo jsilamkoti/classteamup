@@ -6,7 +6,18 @@
 
 ClassTeamUp is a modern web application designed to streamline the team formation process in educational settings. Built for instructors and students, it automatically creates optimal teams based on skills, preferences, and availability.
 
-![ClassTeamUp Dashboard](https://placehold.co/800x400?text=ClassTeamUp+Dashboard)
+## 🚀 Current Status
+
+ClassTeamUp is currently in active development with the following features completed:
+
+- ✅ User authentication with Supabase
+- ✅ Student profile creation and skill management
+- ✅ Team formation algorithm for instructors
+- ✅ Student and instructor dashboards
+- ✅ Team membership management
+- ✅ Visual skill representation with proficiency levels
+- ✅ Team viewing functionality for students and instructors
+- 🔄 Notification system (Planned - see roadmap below)
 
 ## ✨ Features
 
@@ -80,14 +91,49 @@ ClassTeamUp uses a Supabase database with the following tables:
 - `course_enrollments` - Student enrollments in courses
 - `skills` - Catalogue of available skills
 - `student_skills` - Junction table for user skills and proficiency levels
-- `user_skills` - Alternative table for user skills
 - `teams` - Created teams information
 - `team_members` - Members assigned to teams
 - `team_formation_rules` - Rules for team formation
 - `team_required_skills` - Skills required for specific teams
+
+### Planned Database Additions
+
+As part of our roadmap, we're planning to add:
+
+- `notifications` - User notification management
 - `team_invitations` - Team invitation management
 
-To set up your database, you'll need to manually create these tables in your Supabase project. You can use the Supabase web interface to create the necessary tables and relationships.
+## 🗺️ Implementation Roadmap
+
+### Recently Completed
+
+- **UI/UX Enhancements**
+  - Improved team view interface with skill visualization
+  - Added profile completion indicators
+  - Enhanced dashboard layouts for better usability
+
+- **Team Management**
+  - Fixed team member display in student dashboard
+  - Added team formation visualization
+  - Implemented team member skill displays
+
+### Currently In Development
+
+- **Notification System**
+  - Database schema design for notifications
+  - Backend API for notification management 
+  - Frontend components for notification display
+  - Integration points for team events
+
+### Next Up
+
+- **Real-time Updates**
+  - Implement real-time student availability tracking
+  - Add live notifications for team assignments
+
+- **Enhanced Team Formation**
+  - Add machine learning algorithms for better team matching
+  - Create team formation templates for recurring use
 
 ## 👩‍🏫 Using ClassTeamUp
 
@@ -124,16 +170,8 @@ To set up your database, you'll need to manually create these tables in your Sup
 
 3. **Team Dashboard**:
    - Once assigned to a team, view your team details
-   - See teammate information and common availability times
-   - Contact team members directly
-
-## 📱 Authentication Options
-
-ClassTeamUp supports authentication via Supabase:
-
-- Email/Password authentication
-
-To configure additional authentication providers, update your Supabase auth settings in the Supabase dashboard.
+   - See teammate information and skills
+   - Browse skill visualizations with proficiency levels
 
 ## 🛠️ Technology Stack
 
@@ -145,30 +183,6 @@ To configure additional authentication providers, update your Supabase auth sett
 - **Backend**:
   - [Supabase](https://supabase.com/) - Database and Authentication
   - [Next.js API Routes](https://nextjs.org/docs/api-routes/introduction) - Serverless functions
-
-## 🔮 Future Improvements
-
-The following features are planned for future development:
-
-1. **Real-time Updates**:
-   - Implement real-time student availability tracking
-   - Add live notifications for team assignments
-
-2. **Enhanced Team Formation**:
-   - Add machine learning algorithms for even better team matching
-   - Create team formation templates for recurring use
-
-3. **Database Management**:
-   - Add migration scripts for easier database setup
-   - Implement database versioning for updates
-
-4. **Expanded Authentication**:
-   - Add Google OAuth integration
-   - Add GitHub OAuth for developer-focused courses
-
-5. **Analytics Dashboard**:
-   - Add performance metrics for teams
-   - Create visualizations for skill distribution across teams
 
 ## 🤝 Contributing
 
@@ -188,7 +202,7 @@ Distributed under the MIT License. See `LICENSE` for more information.
 
 ## 📧 Contact
 
-Your Name - [your-gnanendraprasadgopi0615@gmail.com](mailto:gnanendraprasadgopi0615@gmail.com)
+Your Name - [gnanendraprasadgopi0615@gmail.com](mailto:gnanendraprasadgopi0615@gmail.com)
 
 Project Link: [https://github.com/GGP0615/classteamup](https://github.com/GGP0615/classteamup)
 

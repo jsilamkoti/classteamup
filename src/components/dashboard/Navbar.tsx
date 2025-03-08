@@ -120,10 +120,14 @@ export default function Navbar({ user }: NavbarProps) {
           </div>
 
           <div className="flex items-center">
-            <button className="p-2 rounded-full hover:bg-gray-100 relative group">
-              <Bell className="h-6 w-6 text-gray-500" />
-              <span className="absolute top-0 right-0 h-2 w-2 rounded-full bg-red-500 group-hover:animate-pulse"></span>
-            </button>
+            <div className="relative group cursor-default">
+              <Bell className="h-6 w-6 text-gray-400" />
+              <div className="absolute hidden group-hover:block right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
+                <div className="px-4 py-2 text-sm text-center text-gray-500">
+                  Notifications coming soon
+                </div>
+              </div>
+            </div>
 
             <div className="ml-3 relative" ref={profileRef}>
               <button
