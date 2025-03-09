@@ -14,7 +14,7 @@ export default function BackButton({
   fallbackPath = '/dashboard', 
   label = 'Back',
   className,
-  ...props 
+  ...props
 }: BackButtonProps) {
   const router = useRouter()
 
@@ -38,7 +38,7 @@ export default function BackButton({
     <button
       onClick={handleBack}
       className={cn(
-        "inline-flex items-center text-sm font-medium text-gray-700 hover:text-gray-900",
+        "inline-flex items-center text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors",
         className
       )}
       {...props}
