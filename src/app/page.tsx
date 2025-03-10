@@ -37,7 +37,7 @@ export default function HomePage() {
             </nav>
             <div className="flex items-center space-x-4">
               <Link 
-                href="/auth/student-signin" 
+                href="/auth/signin" 
                 className="text-gray-600 hover:text-gray-900 font-medium"
               >
                 Sign In
@@ -72,13 +72,13 @@ export default function HomePage() {
               </p>
               <div className="mt-10 flex flex-col sm:flex-row gap-4">
                 <Link 
-                  href="/auth/student-signin" 
+                  href="/auth/signin" 
                   className="w-full sm:w-auto inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
                 >
                   Join as Student
                 </Link>
                 <Link 
-                  href="/auth/instructor-signin" 
+                  href="/auth/signin" 
                   className="w-full sm:w-auto inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-indigo-100 bg-indigo-800 hover:bg-indigo-900"
                 >
                   Sign In as Instructor
@@ -175,7 +175,7 @@ export default function HomePage() {
             </div>
             <div className="ml-3 inline-flex rounded-md shadow">
               <Link 
-                href="/auth/instructor-signin" 
+                href="/auth/signin" 
                 className="inline-flex items-center justify-center px-5 py-3 border border-transparent text-base font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
               >
                 Instructor Login

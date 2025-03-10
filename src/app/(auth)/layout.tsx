@@ -4,17 +4,29 @@ export default function AuthLayout({
   children: React.ReactNode
 }) {
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-indigo-50 to-purple-50 px-4 py-12">
+      {/* Logo and title */}
+      <div className="text-center mb-6">
+        <h1 className="text-4xl font-bold tracking-tight text-indigo-700">
           ClassTeamUp
-        </h2>
+        </h1>
+        <p className="mt-2 text-base text-gray-600">
+          Where teamwork meets learning
+        </p>
       </div>
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
-          {children}
+      
+      {/* Main content */}
+      {children}
+      
+      {/* Footer */}
+      <footer className="mt-8 text-center text-sm text-gray-500">
+        <p>&copy; {new Date().getFullYear()} ClassTeamUp. All rights reserved.</p>
+        <div className="mt-2 space-x-4">
+          <a href="#" className="hover:text-indigo-600">Privacy Policy</a>
+          <a href="#" className="hover:text-indigo-600">Terms of Service</a>
+          <a href="#" className="hover:text-indigo-600">Contact</a>
         </div>
-      </div>
+      </footer>
     </div>
   )
 } 
