@@ -1,90 +1,89 @@
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
-import { redirect } from 'next/navigation'
+'use client'
+
+import { useState, useEffect } from 'react'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { Card } from '@/components/ui/Card'
-import Link from 'next/link'
 import { UserCircle, Users, Search } from 'lucide-react'
-import { createClient } from '@/lib/supabase'
+import Link from 'next/link'
+import Button from '@/components/ui/Button'
 import { toast } from 'react-hot-toast'
 import FindTeamButton from '@/components/teams/FindTeamButton'
 import TeamAvailabilityCard from '@/components/teams/TeamAvailabilityCard'
-import Tooltip from '@/components/ui/Tooltip'
 import BrowseStudentsCard from '@/components/dashboard/BrowseStudentsCard'
 
-export const dynamic = 'force-dynamic'
+export default function StudentDashboardPage() {
+  const [profile, setProfile] = useState<any>(null)
+  const [skills, setSkills] = useState<any[]>([])
+  const [teamInfo, setTeamInfo] = useState<any>(null)
+  const [teamMembers, setTeamMembers] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const supabase = createClientComponentClient()
 
-interface ProfileRequirement {
-  met: boolean;
-  label: string;
-}
-
-export default async function StudentDashboard() {
-  const supabase = createServerComponentClient({ cookies })
-
-  const { data: { session } } = await supabase.auth.getSession()
-  
-  if (!session) {
-    redirect('/auth/signin')
-  }
-
-  // Fetch user profile and skills
-  const { data: profile } = await supabase
-    .from('users')
-    .select('*')
-    .eq('id', session.user.id)
-    .single()
-
-  const isLookingForTeam = profile?.looking_for_team || false;
-  const teamId = profile?.team_id || null;
-
-  // Fetch team information if the user is assigned to a team
-  let teamInfo = null;
-  let teamMembers: Array<{
-    id: string;
-    full_name?: string;
-    email?: string;
-    student_skills?: Array<{
-      skill_id: string;
-      proficiency_level: number;
-    }>;
-  }> = [];
-  
-  if (teamId) {
-    const { data: team } = await supabase
-      .from('teams')
-      .select('*')
-      .eq('id', teamId)
-      .single();
-    
-    if (team) {
-      teamInfo = team;
-      
-      // Fetch team members
-      if (team.members && team.members.length > 0) {
-        const { data: members } = await supabase
-          .from('users')
-          .select(`
-            id,
-            full_name,
-            email,
-            student_skills (skill_id, proficiency_level)
-          `)
-          .in('id', team.members);
+  useEffect(() => {
+    async function loadData() {
+      try {
+        setLoading(true)
         
-        if (members) {
-          teamMembers = members;
+        // Get current user
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session) return
+        
+        // Fetch user profile
+        const { data: userProfile } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', session.user.id)
+          .single()
+        
+        if (userProfile) {
+          setProfile(userProfile)
+          
+          // Fetch user skills
+          const { data: userSkills } = await supabase
+            .from('student_skills')
+            .select('skill_id, proficiency_level')
+            .eq('user_id', session.user.id)
+          
+          setSkills(userSkills || [])
+          
+          // Fetch team if user is in one
+          if (userProfile.team_id) {
+            const { data: team } = await supabase
+              .from('teams')
+              .select('*')
+              .eq('id', userProfile.team_id)
+              .single()
+            
+            setTeamInfo(team)
+
+            // Fetch team members
+            if (team) {
+              const { data: members } = await supabase
+                .from('users')
+                .select(`
+                  id,
+                  full_name,
+                  email,
+                  student_skills (skill_id, proficiency_level)
+                `)
+                .in('id', team.members || [])
+              
+              setTeamMembers(members || [])
+            }
+          }
         }
+      } catch (error) {
+        console.error('Error loading data:', error)
+      } finally {
+        setLoading(false)
       }
     }
-  }
-
-  const { data: skills } = await supabase
-    .from('student_skills')
-    .select('skill_id, proficiency_level')
-    .eq('user_id', session.user.id)
+    
+    loadData()
+  }, [])
 
   // Define and check profile requirements
-  const requirements: ProfileRequirement[] = [
+  const requirements = [
     {
       met: Boolean(profile?.full_name?.length >= 3),
       label: 'Full name (minimum 3 characters)'
@@ -103,40 +102,13 @@ export default async function StudentDashboard() {
   const totalRequirements = requirements.length
   const completionPercentage = (completedRequirements / totalRequirements) * 100
 
-  const handleFindTeam = async () => {
-    try {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      
-      if (!user) {
-        toast.error('Please sign in to continue')
-        return
-      }
-
-      // Update user's availability status
-      const { error } = await supabase
-        .from('users')
-        .update({
-          looking_for_team: true,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', user.id)
-
-      if (error) throw error
-
-      toast.success('You are now available for team matching!')
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to update availability')
-    }
-  }
-
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Dashboard</h1>
+    <div className="space-y-6">
+      <h1 className="text-2xl font-bold text-gray-900 mb-6">Student Dashboard</h1>
       
       {/* Show Team Assignment if user is part of a team */}
       {teamInfo && (
-        <Card className="p-6 mb-6 border-green-200 bg-green-50">
+        <Card className="p-6 mb-6 border-green-200 bg-green-50 hover:shadow transition-shadow">
           <div className="mb-4">
             <h2 className="text-xl font-semibold text-gray-900 flex items-center">
               <Users className="h-5 w-5 text-green-600 mr-2" />
@@ -153,7 +125,7 @@ export default async function StudentDashboard() {
                 <div>
                   <p className="font-medium text-gray-900">
                     {member.full_name || 'Unnamed Student'}
-                    {member.id === session.user.id && (
+                    {member.id === profile?.id && (
                       <span className="ml-2 text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full">
                         You
                       </span>
@@ -177,15 +149,23 @@ export default async function StudentDashboard() {
               </div>
             ))}
           </div>
+          
+          <div className="mt-4">
+            <Link href={`/student-dashboard/team/${teamInfo.id}`}>
+              <Button variant="primary">
+                View Team Details
+              </Button>
+            </Link>
+          </div>
         </Card>
       )}
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {/* Profile Completion Card */}
-        <Card className="p-6 h-full">
+        <Card className="p-6 bg-white shadow-sm hover:shadow transition-shadow">
           <div className="space-y-4">
             <div className="flex justify-between items-center">
-              <h2 className="text-xl font-medium">Profile Completion</h2>
+              <h2 className="text-lg font-medium">Profile Completion</h2>
               <span className={`text-xl font-bold ${
                 completionPercentage === 100 ? 'text-green-600' : 'text-indigo-600'
               }`}>
@@ -229,7 +209,7 @@ export default async function StudentDashboard() {
             )}
           </div>
         </Card>
-
+        
         {/* Action Cards */}
         {/* View/Complete Profile Card */}
         <Link href="/student-dashboard/profile" className="h-full">
@@ -255,11 +235,11 @@ export default async function StudentDashboard() {
         {/* Find Team Card - only show if not already in a team */}
         {!teamInfo ? (
           <TeamAvailabilityCard 
-            initialLookingForTeam={isLookingForTeam} 
+            initialLookingForTeam={profile?.looking_for_team} 
             isProfileComplete={completionPercentage === 100} 
           />
         ) : (
-          <Link href={`/student-dashboard/team/${teamId}`} className="h-full">
+          <Link href="/student-dashboard/my-team" className="h-full">
             <Card className="p-6 h-full flex flex-col justify-between hover:shadow-md transition-shadow border-green-200">
               <div className="flex items-center space-x-3 mb-4">
                 <Users className="h-8 w-8 text-green-600" />

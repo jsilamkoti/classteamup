@@ -248,8 +248,8 @@ export default function SignUpForm() {
             </Button>
           </div>
 
-          <div className="text-sm text-center">
-            <Link href="/auth/signin" className="text-indigo-600 hover:text-indigo-500">
+          <div className="text-center mt-4">
+            <Link href="/signin" className="text-indigo-600 hover:text-indigo-500">
               Already have an account? Sign in
             </Link>
           </div>

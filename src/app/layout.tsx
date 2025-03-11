@@ -3,15 +3,14 @@ import { cookies } from 'next/headers'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import { Toaster } from 'react-hot-toast'
-
+import { Providers } from './providers'
 
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata = {
   title: 'ClassTeamUp',
-  description: 'Team formation platform for classrooms',
+  description: 'Form teams for class projects based on skills and interests',
 }
-
 
 export default async function RootLayout({
   children,
@@ -27,8 +26,12 @@ export default async function RootLayout({
   return (
     <html lang="en">
       <body>
-        <Toaster />
-          {children}
+        <Providers>
+          <div className="page-transition-wrapper">
+            {children}
+          </div>
+          <Toaster position="top-right" />
+        </Providers>
       </body>
     </html>
   )

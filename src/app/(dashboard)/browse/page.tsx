@@ -1,300 +1,257 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createClient } from '@/lib/supabase'
-import { Search, Filter } from 'lucide-react'
-import FilterSidebar from '@/components/browse/FilterSidebar'
-import { toast } from 'react-hot-toast'
-import StudentProfileModal from '@/components/students/StudentProfileModal'
-import TeamInviteButton from '@/components/teams/TeamInviteButton'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { Card } from '@/components/ui/Card'
+import { Search, Filter, Users } from 'lucide-react'
+import Button from '@/components/ui/Button'
+import Link from 'next/link'
 
-interface SkillData {
-  skill_id: string;
-  proficiency_level: number;
-  skills: {
-    name: string;
-  };
+interface Skill {
+  id: string;
+  name: string;
+  category: string;
 }
 
-interface UserData {
-  id: string;
-  full_name: string;
-  avatar_url?: string;
-  bio?: string;
-  availability?: string;
-  user_skills: {
-    skill_id: string;
-    proficiency_level: number;
-    skills: {
-      name: string;
-    };
-  }[];
+interface StudentSkill {
+  skill: Skill;
+  proficiency_level: number;
 }
 
 interface Student {
-  id: string
-  full_name: string
-  avatar_url?: string
-  bio?: string
-  skills?: { skill_id: string; name: string; proficiency_level: number }[]
-  availability?: string
-}
-
-interface FilterState {
-  skills: string[]
-  proficiencyLevel: number | null
-  availability: string | null
-}
-
-interface Skill {
-  skill_id: string;
-  name: string;
-  proficiency_level: number;
+  id: string;
+  full_name: string;
+  email: string;
+  bio: string;
+  looking_for_team: boolean;
+  student_skills: StudentSkill[];
 }
 
 export default function BrowseStudentsPage() {
-  const [students, setStudents] = useState<any[]>([])
-  const [filteredStudents, setFilteredStudents] = useState<any[]>([])
+  const supabase = createClientComponentClient()
+  const [students, setStudents] = useState<Student[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
-  const [isFilterOpen, setIsFilterOpen] = useState(false)
-  const [filters, setFilters] = useState<FilterState>({
-    skills: [],
-    proficiencyLevel: null,
-    availability: null
-  })
-  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null)
-  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false)
-  const supabase = createClient()
+  const [skills, setSkills] = useState<Skill[]>([])
+  const [selectedSkill, setSelectedSkill] = useState<string>('')
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    const fetchStudents = async () => {
+    async function loadStudents() {
       try {
         setLoading(true)
-        
+        console.log('Loading browse students data')
+
         // Get current user
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) return
-
-        // Get all students except current user who are looking for teams
-        const { data: users, error } = await supabase
-          .from('users')
-          .select('*')
-          .eq('role', 'student')
-          .eq('looking_for_team', true)  // Only get students looking for teams
-          .neq('id', user.id)  // Exclude current user
-
-        if (error) {
-          console.error('Database error:', error.message)
-          toast.error(`Failed to load students: ${error.message}`)
+        const { data: { user }, error: userError } = await supabase.auth.getUser()
+        
+        if (userError) {
+          console.error('Auth error:', userError.message)
+          setError('Authentication error')
           return
         }
 
-        // Then, for each student, get their skills
-        const studentsWithSkills = await Promise.all(
-          users.map(async (user) => {
-            const { data: skills } = await supabase
-              .from('student_skills')
-              .select(`
-                skill_id,
-                proficiency_level,
-                skills (
-                  name
-                )
-              `)
-              .eq('user_id', user.id)
+        // First load all available skills for filtering
+        const { data: skillsData } = await supabase
+          .from('skills')
+          .select('id, name, category')
+          .order('category')
+          .order('name')
+        
+        if (skillsData) {
+          setSkills(skillsData)
+        }
 
-            return {
-              ...user,
-              skills: skills?.map((skill: any) => ({
-                skill_id: skill.skill_id,
-                name: skill.skills.name,
-                proficiency_level: skill.proficiency_level
-              })) || []
-            }
-          })
-        )
+        // Fetch students with their skills
+        const { data: studentsData, error: studentsError } = await supabase
+          .from('profiles')
+          .select(`
+            id,
+            full_name,
+            email,
+            bio,
+            looking_for_team,
+            student_skills (
+              skill:skills (
+                id,
+                name,
+                category
+              ),
+              proficiency_level
+            )
+          `)
+          .eq('role', 'student')
+          .neq('id', user?.id) // Don't show current user
+          .eq('looking_for_team', true) // Only show students looking for a team
+          
+        if (studentsError) {
+          console.error('Error fetching students:', studentsError)
+          setError('Could not load student data')
+          return
+        }
 
-        setStudents(studentsWithSkills)
-        setFilteredStudents(studentsWithSkills)
-      } catch (error: any) {
-        console.error('Error:', error)
-        toast.error(error.message || 'Something went wrong. Please try again.')
+        console.log('Loaded students:', studentsData?.length || 0)
+        setStudents(studentsData || [])
+      } catch (err) {
+        console.error('Unexpected error:', err)
+        setError('Failed to load students')
       } finally {
         setLoading(false)
       }
     }
 
-    fetchStudents()
-  }, [])
+    loadStudents()
+  }, [supabase])
 
-  // Apply search and filters
-  useEffect(() => {
-    let result = [...students]
-
-    // Apply search
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase()
-      result = result.filter(student => 
-        student.full_name.toLowerCase().includes(query) ||
-        student.bio?.toLowerCase().includes(query) ||
-        student.skills?.some((skill: Skill) => skill.name.toLowerCase().includes(query))
-      )
-    }
-
-    // Apply skill filters
-    if (filters.skills.length > 0) {
-      result = result.filter(student =>
-        student.skills?.some((skill: Skill) =>
-          filters.skills.includes(skill.skill_id)
-        )
-      )
-    }
-
-    // Apply proficiency filter
-    if (filters.proficiencyLevel !== null) {
-      result = result.filter(student =>
-        student.skills?.some((skill: Skill) =>
-          skill.proficiency_level >= filters.proficiencyLevel!
-        )
-      )
-    }
-
-    // Apply availability filter
-    if (filters.availability) {
-      result = result.filter(student =>
-        student.availability === filters.availability
-      )
-    }
-
-    setFilteredStudents(result)
-  }, [searchQuery, filters, students])
+  // Filter students based on search query and selected skill
+  const filteredStudents = students.filter(student => {
+    const matchesSearch = searchQuery === '' || 
+      student.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (student.bio && student.bio.toLowerCase().includes(searchQuery.toLowerCase()))
+    
+    const matchesSkill = selectedSkill === '' || 
+      (student.student_skills && student.student_skills.some(
+        s => s.skill.id === selectedSkill
+      ))
+    
+    return matchesSearch && matchesSkill
+  })
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">Browse Students</h1>
+    <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 py-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold text-gray-900 mb-4 sm:mb-0">Browse Students</h1>
         
-        {/* Search and Filter Bar */}
-        <div className="flex space-x-4">
+        <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3">
           <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <Search className="h-5 w-5 text-gray-400" />
+            </div>
             <input
               type="text"
               placeholder="Search students..."
-              className="pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+              className="pl-10 pr-4 py-2 border border-gray-300 rounded-md w-full sm:w-64"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
-            <Search className="h-5 w-5 text-gray-400 absolute left-3 top-2.5" />
           </div>
-          <button 
-            onClick={() => setIsFilterOpen(true)}
-            className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-          >
-            <Filter className="h-5 w-5 mr-2" />
-            Filters
-          </button>
+          
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <Filter className="h-5 w-5 text-gray-400" />
+            </div>
+            <select
+              className="pl-10 pr-4 py-2 border border-gray-300 rounded-md w-full appearance-none"
+              value={selectedSkill}
+              onChange={(e) => setSelectedSkill(e.target.value)}
+            >
+              <option value="">All Skills</option>
+              {skills.map(skill => (
+                <option key={skill.id} value={skill.id}>
+                  {skill.name} ({skill.category})
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
-      {/* Filter Sidebar */}
-      <FilterSidebar
-        isOpen={isFilterOpen}
-        onClose={() => setIsFilterOpen(false)}
-        onFilterChange={setFilters}
-      />
-
-      {/* Students Grid */}
       {loading ? (
-        <div className="text-center py-12">
-          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-indigo-500 border-r-transparent"></div>
-          <p className="mt-4 text-gray-500">Loading students...</p>
-        </div>
-      ) : filteredStudents.length === 0 ? (
-        <div className="text-center py-12">
-          <p className="text-gray-500">No students found matching your criteria.</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredStudents.map((student) => (
-            <div
-              key={student.id}
-              className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow"
-            >
-              <div className="flex items-center space-x-4">
-                <div className="h-12 w-12 rounded-full bg-gray-200 flex-shrink-0">
-                  {student.avatar_url ? (
-                    <img
-                      src={student.avatar_url}
-                      alt={student.full_name}
-                      className="h-12 w-12 rounded-full object-cover"
-                    />
-                  ) : (
-                    <div className="h-12 w-12 rounded-full bg-indigo-600 flex items-center justify-center">
-                      <span className="text-white text-lg font-medium">
-                        {student.full_name[0]}
-                      </span>
-                    </div>
-                  )}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[...Array(6)].map((_, i) => (
+            <Card key={i} className="p-6">
+              <div className="animate-pulse">
+                <div className="h-4 bg-gray-200 rounded w-3/4 mb-4"></div>
+                <div className="h-3 bg-gray-200 rounded w-1/2 mb-2"></div>
+                <div className="h-3 bg-gray-200 rounded w-5/6 mb-4"></div>
+                <div className="flex flex-wrap gap-2 mb-4">
+                  <div className="h-6 bg-gray-200 rounded w-16"></div>
+                  <div className="h-6 bg-gray-200 rounded w-20"></div>
+                  <div className="h-6 bg-gray-200 rounded w-24"></div>
                 </div>
-                <div>
-                  <h3 className="text-lg font-medium text-gray-900">
-                    {student.full_name}
-                  </h3>
-                  {student.bio && (
-                    <p className="text-sm text-gray-500 line-clamp-2">
-                      {student.bio}
-                    </p>
-                  )}
-                </div>
+                <div className="h-8 bg-indigo-100 rounded"></div>
               </div>
-
-              {/* Skills */}
-              {student.skills && student.skills.length > 0 && (
-                <div className="mt-4">
-                  <div className="flex flex-wrap gap-2">
-                    {student.skills.map((skill: Skill, index: number) => (
-                      <span
-                        key={index}
-                        className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800"
-                      >
-                        {skill.name}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Actions */}
-              <div className="mt-6 flex justify-end space-x-3">
-                <button 
-                  onClick={() => {
-                    setSelectedStudent(student)
-                    setIsProfileModalOpen(true)
-                  }}
-                  className="text-sm text-indigo-600 hover:text-indigo-900"
-                >
-                  View Profile
-                </button>
-                <TeamInviteButton 
-                  studentId={student.id}
-                  studentName={student.full_name}
-                />
-              </div>
+            </Card>
+          ))}
+        </div>
+      ) : error ? (
+        <Card className="p-6">
+          <div className="flex flex-col items-center justify-center py-12">
+            <div className="bg-red-100 p-3 rounded-full mb-4">
+              <svg className="h-8 w-8 text-red-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
             </div>
+            <h3 className="text-xl font-medium text-gray-900 mb-2">Error Loading Students</h3>
+            <p className="text-red-500 text-center mb-4">{error}</p>
+            <Button onClick={() => window.location.reload()}>Try Again</Button>
+          </div>
+        </Card>
+      ) : filteredStudents.length === 0 ? (
+        <Card className="p-6">
+          <div className="flex flex-col items-center justify-center py-12">
+            <div className="bg-gray-100 p-3 rounded-full mb-4">
+              <Users className="h-8 w-8 text-gray-400" />
+            </div>
+            <h3 className="text-xl font-medium text-gray-900 mb-2">No Students Found</h3>
+            <p className="text-gray-600 text-center max-w-md mb-4">
+              {searchQuery || selectedSkill ? 
+                "No students match your current filters. Try adjusting your search criteria." :
+                "There are no students currently looking for a team. Check back later!"}
+            </p>
+            {(searchQuery || selectedSkill) && (
+              <Button 
+                onClick={() => {
+                  setSearchQuery('')
+                  setSelectedSkill('')
+                }}
+              >
+                Clear Filters
+              </Button>
+            )}
+          </div>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredStudents.map(student => (
+            <Card key={student.id} className="p-6 flex flex-col justify-between h-full">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900 mb-1">{student.full_name}</h2>
+                
+                <div className="flex items-center mb-3">
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                    Looking for Team
+                  </span>
+                </div>
+                
+                {student.bio && (
+                  <p className="text-sm text-gray-600 mb-4 line-clamp-3">{student.bio}</p>
+                )}
+                
+                {student.student_skills && student.student_skills.length > 0 && (
+                  <div className="mb-4">
+                    <p className="text-xs text-gray-500 mb-1">Skills:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {student.student_skills.map((skillData, index) => (
+                        <span
+                          key={index}
+                          className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800"
+                        >
+                          {skillData.skill.name} ({skillData.proficiency_level})
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              <Link href={`/student-profile/${student.id}`} passHref>
+                <Button fullWidth variant="primary">View Profile</Button>
+              </Link>
+            </Card>
           ))}
         </div>
       )}
-
-      {/* Add the modal */}
-      <StudentProfileModal
-        isOpen={isProfileModalOpen}
-        onClose={() => {
-          setIsProfileModalOpen(false)
-          setSelectedStudent(null)
-        }}
-        student={selectedStudent}
-      />
     </div>
   )
 } 

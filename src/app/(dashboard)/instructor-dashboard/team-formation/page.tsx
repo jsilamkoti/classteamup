@@ -363,36 +363,79 @@ export default function TeamFormationPage() {
     }
   }
 
+  // Add this function to check schema before team formation
+  const checkTeamsSchema = async () => {
+    if (!debugMode) return true;
+    
+    try {
+      addDebugLog('Checking teams table schema...', 'info');
+      
+      const { data, error } = await supabase
+        .from('teams')
+        .select('*')
+        .limit(1);
+        
+      if (error) {
+        addDebugLog(`Error checking teams schema: ${error.message}`, 'error');
+        return false;
+      }
+      
+      // Get available columns
+      const columns = data ? Object.keys(data[0] || {}) : [];
+      addDebugLog(`Teams table columns: ${columns.join(', ')}`, 'info');
+      
+      // Check for required columns
+      const requiredColumns = ['name', 'description', 'course_id', 'created_by'];
+      const missingColumns = requiredColumns.filter(col => !columns.includes(col));
+      
+      if (missingColumns.length > 0) {
+        addDebugLog(`Missing required columns: ${missingColumns.join(', ')}`, 'error');
+        return false;
+      }
+      
+      return true;
+    } catch (error: any) {
+      addDebugLog(`Schema check failed: ${error.message}`, 'error');
+      return false;
+    }
+  };
+
+  // Update the handleFormTeams function
   const handleFormTeams = async () => {
     try {
-      setLoading(true)
+      setLoading(true);
+      setErrorMessage('');
+      setSuccessMessage('');
       
       if (debugMode) {
         clearDebugLogs();
         addDebugLog('Starting team formation process', 'info');
-        // Check schema - don't await here since handleFormTeams itself is async
-        checkDatabaseSchema().then(() => {
-          if (debugMode) {
-            addDebugLog('Schema check completed', 'info');
-          }
-        }).catch((error) => {
-          if (debugMode) {
-            addDebugLog(`Schema check failed: ${error.message}`, 'error');
-          }
-        });
       }
       
-      const matchingService = new TeamMatchingService()
-      
-      // Log debug information if debug mode is enabled
+      // Get current user to validate instructor access
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) {
+        console.error('Error getting current user:', userError);
+        toast.error('Authentication error. Please log in again.');
+        if (debugMode) {
+          addDebugLog(`Authentication error: ${userError?.message || 'User not found'}`, 'error');
+        }
+        setLoading(false);
+        return;
+      }
+
+      // First check if we can access the teams table
       if (debugMode) {
-        addDebugLog(`Using criteria: min size=${formationRule.min_team_size}, max size=${formationRule.max_team_size}`, 'info');
-        addDebugLog(`Course ID: ${formationRule.course_id}`, 'info');
-        
-        // Add a debug toast to make it more visible
-        toast.success("Debug mode is active. Check browser console for detailed logs.");
+        addDebugLog('Checking teams table access...', 'info');
+        const { data, error } = await supabase.from('teams').select('*').limit(1);
+        if (error) {
+          addDebugLog(`Error accessing teams table: ${error.message}`, 'error');
+          setErrorMessage('Error accessing teams table. Please check your permissions.');
+          return;
+        }
+        addDebugLog(`Teams table accessible. Available columns: ${Object.keys(data[0] || {}).join(', ')}`, 'info');
       }
-      
+
       // Create criteria based on formation rules
       const criteria = {
         minTeamSize: formationRule.min_team_size,
@@ -403,174 +446,192 @@ export default function TeamFormationPage() {
         considerAvailability: true,
         skillWeighting: formationRule.skill_distribution_rules.diversityWeight
       };
-      
-      // Get current user to validate instructor access
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      if (userError) {
-        console.error('Error getting current user:', userError);
-        toast.error('Authentication error. Please log in again.');
-        if (debugMode) {
-          addDebugLog(`Authentication error: ${userError.message}`, 'error');
-        }
-        setLoading(false);
+
+      if (debugMode) {
+        addDebugLog(`Using criteria: min size=${criteria.minTeamSize}, max size=${criteria.maxTeamSize}`, 'info');
+        addDebugLog(`Course ID: ${formationRule.course_id}`, 'info');
+      }
+
+      const matchingService = new TeamMatchingService();
+      const teams = await matchingService.matchTeams(criteria);
+
+      if (teams.length === 0) {
+        const msg = availableStudents === 0
+          ? 'No available students found to form teams.'
+          : availableStudents < formationRule.min_team_size
+          ? `Cannot form teams: Only ${availableStudents} students available, but minimum team size is ${formationRule.min_team_size}.`
+          : 'No teams could be formed with the current criteria.';
+        
+        setErrorMessage(msg);
+        if (debugMode) addDebugLog(msg, 'error');
         return;
       }
-      
-      // Attempt to form teams
-      try {
-        if (debugMode) {
-          addDebugLog('Calling matchTeams function...', 'info');
-        }
-        
-        const teams = await matchingService.matchTeams(criteria);
-        
-        if (teams.length === 0) {
-          let msg = 'No teams could be formed with the current criteria.';
-          if (availableStudents === 0) {
-            msg = 'No available students found to form teams.';
-          } else if (availableStudents < formationRule.min_team_size) {
-            msg = `Cannot form teams: Only ${availableStudents} students available, but minimum team size is ${formationRule.min_team_size}.`;
-          }
-          setErrorMessage(msg);
-          if (debugMode) addDebugLog(msg, 'error');
-          return;
-        }
-        
-        if (debugMode) {
-          addDebugLog(`Teams returned by matching algorithm: ${teams.length}`, 'info');
-        }
-        
-        // Display formed teams in the UI before saving
-        setFormedTeams(teams);
 
-        let createdCount = 0;
-        let errorCount = 0;
+      if (debugMode) {
+        addDebugLog(`Teams returned by matching algorithm: ${teams.length}`, 'info');
+      }
 
-        // Loop through each team
-        for (const team of teams) {
+      // Display formed teams in the UI before saving
+      setFormedTeams(teams);
+
+      let createdCount = 0;
+      let errorCount = 0;
+
+      // Loop through each team
+      for (const team of teams) {
+        if (debugMode) {
+          addDebugLog(`Creating team for ${team.length} members`, 'info');
+        }
+
+        // Generate a readable team name
+        const teamNamePrefix = 'Team';
+        const teamNumber = Math.floor(Math.random() * 1000) + 1;
+        const teamName = `${teamNamePrefix} ${teamNumber}`;
+
+        // Prepare minimal team data
+        const teamData = {
+          name: teamName,
+          description: `Automatically generated team with ${team.length} members`,
+          course_id: formationRule.course_id
+        };
+
+        try {
           if (debugMode) {
-            addDebugLog(`Creating team for ${team.length} members`, 'info');
+            addDebugLog(`Sending team creation request for "${teamName}"`, 'info');
+            console.log('Team data:', teamData);
           }
+
+          // Call the API to create team
+          const teamResponse = await fetch('/api/instructor/create-team', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ teamData }),
+          });
+
+          const teamResult = await teamResponse.json();
           
-          // Generate a readable team name
-          const teamNamePrefix = 'Team';
-          const teamNumber = Math.floor(Math.random() * 1000) + 1;
-          const teamName = `${teamNamePrefix} ${teamNumber}`;
-          
-          // Use the API endpoint to create the team
-          const teamData = {
-            name: teamName,
-            description: `Automatically generated team with ${team.length} members`,
-            course_id: formationRule.course_id
-          };
-          
-          try {
-            // Call the API to create team
-            const teamResponse = await fetch('/api/instructor/create-team', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({ teamData }),
-            });
-            
-            if (!teamResponse.ok) {
-              const errorData = await teamResponse.json();
-              if (debugMode) {
-                addDebugLog(`Failed to create team "${teamName}": ${errorData.error}`, 'error');
-              }
-              errorCount++;
-              continue;
-            }
-            
-            const teamResult = await teamResponse.json();
-            const newTeamId = teamResult.team.id;
-            
+          if (debugMode) {
+            console.log('Team creation response:', teamResult);
+          }
+
+          if (!teamResponse.ok) {
             if (debugMode) {
-              addDebugLog(`Team "${teamName}" created with ID: ${newTeamId}`, 'success');
-            }
-            
-            // Add members to the team
-            let memberSuccessCount = 0;
-            
-            for (const student of team) {
-              try {
-                if (debugMode) {
-                  addDebugLog(`Adding member ${student.full_name || student.id} to team "${teamName}"`, 'info');
-                }
-                
-                // Call the API to add team member
-                const memberResponse = await fetch('/api/instructor/add-team-member', {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                  },
-                  body: JSON.stringify({ 
-                    teamId: newTeamId,
-                    userId: student.id
-                  }),
-                });
-                
-                if (!memberResponse.ok) {
-                  const memberErrorData = await memberResponse.json();
-                  if (debugMode) {
-                    addDebugLog(`Failed to add member ${student.full_name || student.id}: ${memberErrorData.error}`, 'error');
-                  }
-                  continue;
-                }
-                
-                memberSuccessCount++;
-                if (debugMode) {
-                  addDebugLog(`Added member ${student.full_name || student.id} to team "${teamName}"`, 'success');
-                }
-              } catch (memberError: any) {
-                if (debugMode) {
-                  addDebugLog(`Error adding member ${student.full_name || student.id}: ${memberError.message}`, 'error');
-                }
+              addDebugLog(`Failed to create team "${teamName}": ${teamResult.error}`, 'error');
+              if (teamResult.details) {
+                addDebugLog(`Error details: ${teamResult.details}`, 'error');
               }
-            }
-            
-            if (memberSuccessCount === team.length) {
-              createdCount++;
-              if (debugMode) {
-                addDebugLog(`All ${memberSuccessCount} members added to team "${teamName}"`, 'success');
-              }
-            } else {
-              if (debugMode) {
-                addDebugLog(`Only ${memberSuccessCount}/${team.length} members added to team "${teamName}"`, 'warning');
-              }
-            }
-            
-          } catch (teamError: any) {
-            if (debugMode) {
-              addDebugLog(`Error creating team: ${teamError.message}`, 'error');
+              console.error('Team creation failed:', teamResult);
             }
             errorCount++;
+            continue;
           }
-        }
-        
-        // Handle results message
-        if (createdCount > 0) {
-          if (createdCount === teams.length) {
-            setSuccessMessage(`Successfully created all ${createdCount} teams!`);
-            toast.success(`Created ${createdCount} teams successfully!`);
+
+          const newTeamId = teamResult.team.id;
+
+          if (debugMode) {
+            addDebugLog(`Team "${teamName}" created with ID: ${newTeamId}`, 'success');
+          }
+
+          // Add members to the team
+          let memberSuccessCount = 0;
+
+          for (const student of team) {
+            try {
+              if (debugMode) {
+                addDebugLog(`Adding member ${student.full_name || student.id} to team "${teamName}"`, 'info');
+              }
+
+              // Call the API to add team member
+              const memberResponse = await fetch('/api/instructor/add-team-member', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ 
+                  teamId: newTeamId,
+                  userId: student.id
+                }),
+              });
+
+              const memberResult = await memberResponse.json();
+              
+              if (debugMode) {
+                console.log('Member addition response:', memberResult);
+                if (memberResult.error) {
+                  addDebugLog(`Member addition failed: ${memberResult.error}`, 'error');
+                  if (memberResult.details) {
+                    addDebugLog(`Error details: ${memberResult.details}`, 'error');
+                  }
+                }
+              }
+
+              if (!memberResponse.ok) {
+                if (debugMode) {
+                  addDebugLog(`Failed to add member ${student.full_name || student.id}: ${memberResult.error}`, 'error');
+                }
+                continue;
+              }
+
+              memberSuccessCount++;
+              if (debugMode) {
+                addDebugLog(`Successfully added member ${student.full_name || student.id} to team "${teamName}"`, 'success');
+              }
+
+              // Update the user's looking_for_team status
+              const { error: updateError } = await supabase
+                .from('users')
+                .update({ looking_for_team: false })
+                .eq('id', student.id);
+
+              if (updateError && debugMode) {
+                addDebugLog(`Warning: Failed to update looking_for_team status for ${student.full_name || student.id}`, 'warning');
+              }
+
+            } catch (memberError: any) {
+              console.error('Member addition error:', memberError);
+              if (debugMode) {
+                addDebugLog(`Error adding member ${student.full_name || student.id}: ${memberError.message}`, 'error');
+              }
+            }
+          }
+
+          if (memberSuccessCount === team.length) {
+            createdCount++;
+            if (debugMode) {
+              addDebugLog(`All ${memberSuccessCount} members added to team "${teamName}"`, 'success');
+            }
           } else {
-            setSuccessMessage(`Created ${createdCount}/${teams.length} teams.`);
-            setErrorMessage(`Failed to create ${errorCount} teams. Check debug logs for details.`);
-            toast.success(`Created ${createdCount} teams, but ${errorCount} failed.`);
+            if (debugMode) {
+              addDebugLog(`Only ${memberSuccessCount}/${team.length} members added to team "${teamName}"`, 'warning');
+            }
           }
-        } else {
-          setErrorMessage(`Failed to create any teams. Check debug logs for details.`);
-          toast.error('Failed to create teams.');
-        }
-      } catch (error: any) {
-        console.error('Error forming teams:', error);
-        setErrorMessage(`Error forming teams: ${error.message}`);
-        if (debugMode) {
-          addDebugLog(`Error forming teams: ${error.message}`, 'error');
-          addDebugLog('Check console for full error details', 'error');
+
+        } catch (teamError: any) {
+          console.error('Team creation error:', teamError);
+          if (debugMode) {
+            addDebugLog(`Error creating team: ${teamError.message}`, 'error');
+          }
+          errorCount++;
         }
       }
+
+      // Handle results message
+      if (createdCount > 0) {
+        if (createdCount === teams.length) {
+          setSuccessMessage(`Successfully created all ${createdCount} teams!`);
+          toast.success(`Created ${createdCount} teams successfully!`);
+        } else {
+          setSuccessMessage(`Created ${createdCount}/${teams.length} teams.`);
+          setErrorMessage(`Failed to create ${errorCount} teams. Check debug logs for details.`);
+          toast.success(`Created ${createdCount} teams, but ${errorCount} failed.`);
+        }
+      } else {
+        setErrorMessage(`Failed to create any teams. Check debug logs for details.`);
+        toast.error('Failed to create teams.');
+      }
+
     } catch (error: any) {
       console.error('Error forming teams:', error);
       setErrorMessage(`Error forming teams: ${error.message}`);
@@ -818,25 +879,31 @@ export default function TeamFormationPage() {
           <h2 className="text-xl font-medium mb-4">Team Diversity</h2>
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 Diversity Weight: {formationRule.skill_distribution_rules.diversityWeight}
               </label>
-              <input
-                type="range"
-                min={0}
-                max={1}
-                step={0.1}
-                value={formationRule.skill_distribution_rules.diversityWeight}
-                onChange={(e) => setFormationRule(prev => ({
-                  ...prev,
-                  skill_distribution_rules: {
-                    ...prev.skill_distribution_rules,
-                    diversityWeight: parseFloat(e.target.value)
-                  }
-                }))}
-                className="mt-2 w-full"
-              />
-              <p className="mt-1 text-sm text-gray-500">
+              <div className="relative">
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.1}
+                  value={formationRule.skill_distribution_rules.diversityWeight}
+                  onChange={(e) => setFormationRule(prev => ({
+                    ...prev,
+                    skill_distribution_rules: {
+                      ...prev.skill_distribution_rules,
+                      diversityWeight: parseFloat(e.target.value)
+                    }
+                  }))}
+                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                />
+                <div className="mt-1 flex justify-between text-xs text-gray-500">
+                  <span>Low Diversity</span>
+                  <span>High Diversity</span>
+                </div>
+              </div>
+              <p className="mt-2 text-sm text-gray-500">
                 Higher values prioritize skill diversity in teams
               </p>
             </div>
@@ -865,11 +932,11 @@ export default function TeamFormationPage() {
       <div className="mt-8 space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <Button 
-              onClick={handleSaveRules} 
-              variant="outline" 
+            <Button
+              onClick={handleSaveRules}
+              variant="secondary"
               disabled={!validation.isValid || isSaving}
-              className="mr-4"
+              className="mr-4 shadow-sm"
             >
               {isSaving ? (
                 <>
@@ -900,11 +967,8 @@ export default function TeamFormationPage() {
           </div>
           <Button
             onClick={handleFormTeams}
-            disabled={
-              loading || 
-              availableStudents < formationRule.min_team_size || 
-              !validation.isValid
-            }
+            variant="action"
+            disabled={!validation.isValid || loading || availableStudents < formationRule.min_team_size}
           >
             {loading ? (
               <>
