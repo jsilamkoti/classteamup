@@ -1,11 +1,15 @@
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
-import { Inter } from 'next/font/google'
+import { Nunito } from 'next/font/google' // Import Nunito
 import './globals.css'
 import { Toaster } from 'react-hot-toast'
 import { Providers } from './providers'
 
-const inter = Inter({ subsets: ['latin'] })
+const nunito = Nunito({
+  subsets: ['latin'],
+  weight: ['400', '700'], // Include regular and bold weights
+  variable: '--font-nunito', // Define a CSS variable (optional, but recommended)
+})
 
 export const metadata = {
   title: 'ClassTeamUp',
@@ -25,7 +29,7 @@ export default async function RootLayout({
 
   return (
     <html lang="en">
-      <body>
+      <body className={`${nunito.variable} font-sans`}> {/* Apply the font */}
         <Providers>
           <div className="page-transition-wrapper">
             {children}
