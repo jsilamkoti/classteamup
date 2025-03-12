@@ -1,0 +1,34 @@
+<changelist name="Uncommitted_changes_before_Checkout_at_3_7_2025_1_54_PM_[Changes]" date="1741373763377" recycled="true" deleted="true">
+  <option name="PATH" value="$PROJECT_DIR$/.idea/shelf/Uncommitted_changes_before_Checkout_at_3_7_2025_1_54_PM_[Changes]/shelved.patch" />
+  <option name="DESCRIPTION" value="Uncommitted changes before Checkout at 3/7/2025 1:54 PM [Changes]" />
+  <binary>
+    <option name="BEFORE_PATH" />
+    <option name="AFTER_PATH" value="public/android-chrome-512x512.png" />
+    <option name="SHELVED_PATH" value="$PROJECT_DIR$/.idea/shelf/Uncommitted_changes_before_Checkout_at_3_7_2025_1_54_PM_[Changes]/android-chrome-512x512.png" />
+  </binary>
+  <binary>
+    <option name="BEFORE_PATH" />
+    <option name="AFTER_PATH" value="public/android-chrome-192x192.png" />
+    <option name="SHELVED_PATH" value="$PROJECT_DIR$/.idea/shelf/Uncommitted_changes_before_Checkout_at_3_7_2025_1_54_PM_[Changes]/android-chrome-192x192.png" />
+  </binary>
+  <binary>
+    <option name="BEFORE_PATH" value="src/app/favicon.ico" />
+    <option name="AFTER_PATH" value="src/app/favicon.ico" />
+    <option name="SHELVED_PATH" value="$PROJECT_DIR$/.idea/shelf/Uncommitted_changes_before_Checkout_at_3_7_2025_1_54_PM_[Changes]/favicon.ico" />
+  </binary>
+  <binary>
+    <option name="BEFORE_PATH" />
+    <option name="AFTER_PATH" value="public/apple-touch-icon.png" />
+    <option name="SHELVED_PATH" value="$PROJECT_DIR$/.idea/shelf/Uncommitted_changes_before_Checkout_at_3_7_2025_1_54_PM_[Changes]/apple-touch-icon.png" />
+  </binary>
+  <binary>
+    <option name="BEFORE_PATH" />
+    <option name="AFTER_PATH" value="public/favicon-16x16.png" />
+    <option name="SHELVED_PATH" value="$PROJECT_DIR$/.idea/shelf/Uncommitted_changes_before_Checkout_at_3_7_2025_1_54_PM_[Changes]/favicon-16x16.png" />
+  </binary>
+  <binary>
+    <option name="BEFORE_PATH" />
+    <option name="AFTER_PATH" value="public/favicon-32x32.png" />
+    <option name="SHELVED_PATH" value="$PROJECT_DIR$/.idea/shelf/Uncommitted_changes_before_Checkout_at_3_7_2025_1_54_PM_[Changes]/favicon-32x32.png" />
+  </binary>
+</changelist>

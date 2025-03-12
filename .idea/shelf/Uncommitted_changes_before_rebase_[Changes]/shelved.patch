@@ -1,0 +1,99 @@
+Index: src/components/auth/SignInForm.tsx
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>'use client'\r\n\r\nimport { useState } from 'react'\r\nimport { createClient } from '@/lib/supabase'\r\nimport Button from '@/components/ui/Button'\r\nimport { useRouter } from 'next/navigation'\r\nimport Link from 'next/link'\r\nimport toast from 'react-hot-toast'\r\n\r\nexport default function SignInForm() {\r\n  const router = useRouter()\r\n  const [formData, setFormData] = useState({\r\n    email: '',\r\n    password: '',\r\n  })\r\n  const [loading, setLoading] = useState(false)\r\n  const [error, setError] = useState<string | null>(null)\r\n  const supabase = createClient()\r\n\r\n  const handleSubmit = async (e: React.FormEvent) => {\r\n    e.preventDefault()\r\n    setLoading(true)\r\n    setError(null)\r\n    console.log('Starting sign in process...')\r\n\r\n    try {\r\n      // Sign in the user\r\n      console.log('Attempting to sign in...')\r\n      const { data, error: signInError } = await supabase.auth.signInWithPassword({\r\n        email: formData.email,\r\n        password: formData.password,\r\n      })\r\n\r\n      if (signInError) {\r\n        console.error('Sign in error:', signInError)\r\n        if (signInError.message.includes('rate limit')) {\r\n          setError('Too many login attempts. Please wait a few minutes and try again.')\r\n        } else {\r\n          setError(signInError.message)\r\n        }\r\n        return\r\n      }\r\n\r\n      console.log('Sign in successful:', data)\r\n\r\n      if (!data?.user) {\r\n        console.error('No user data returned')\r\n        throw new Error('No user data returned')\r\n      }\r\n\r\n      // Verify user profile exists\r\n      console.log('Fetching user profile...')\r\n      const { data: profile, error: profileError } = await supabase\r\n        .from('users')\r\n        .select('id, email, full_name, role')\r\n        .eq('id', data.user.id)\r\n        .single()\r\n\r\n      if (profileError) {\r\n        console.error('Profile fetch error:', profileError)\r\n        throw profileError\r\n      }\r\n\r\n      if (!profile) {\r\n        console.error('No profile found')\r\n        throw new Error('User profile not found')\r\n      }\r\n\r\n      console.log('Profile found:', profile)\r\n\r\n      // Force a revalidation of the session\r\n      console.log('Refreshing session...')\r\n      await supabase.auth.refreshSession()\r\n\r\n      // Get the current session\r\n      const { data: { session }, error: sessionError } = await supabase.auth.getSession()\r\n      \r\n      if (sessionError) {\r\n        console.error('Session error:', sessionError)\r\n        throw new Error('Failed to establish session')\r\n      }\r\n\r\n      if (!session) {\r\n        console.error('No session established')\r\n        throw new Error('No session established')\r\n      }\r\n\r\n      console.log('Session established:', session)\r\n      \r\n      // Set auth cookie\r\n      const response = await fetch('/api/auth/session', {\r\n        method: 'POST',\r\n        headers: {\r\n          'Content-Type': 'application/json',\r\n        },\r\n        body: JSON.stringify({ session }),\r\n      })\r\n\r\n      if (!response.ok) {\r\n        throw new Error('Failed to set session cookie')\r\n      }\r\n\r\n      console.log('Session cookie set, redirecting...')\r\n      toast.success('Signed in successfully')\r\n      \r\n      // Update redirect path based on user role\r\n      if (profile.role === 'student') {\r\n        window.location.href = '/student-dashboard'\r\n      } else {\r\n        window.location.href = '/dashboard'\r\n      }\r\n    } catch (error: any) {\r\n      console.error('Full error object:', error)\r\n      setError(error.message)\r\n      toast.error(error.message)\r\n    } finally {\r\n      setLoading(false)\r\n    }\r\n  }\r\n\r\n  return (\r\n    <div className=\"min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8\">\r\n      <div className=\"max-w-md w-full space-y-8\">\r\n        <div>\r\n          <h2 className=\"mt-6 text-center text-3xl font-extrabold text-gray-900\">\r\n            Sign in to ClassTeamUp\r\n          </h2>\r\n        </div>\r\n        <form className=\"mt-8 space-y-6\" onSubmit={handleSubmit}>\r\n          <div className=\"rounded-md shadow-sm space-y-4\">\r\n            <div>\r\n              <label htmlFor=\"email\" className=\"block text-sm font-medium text-gray-700\">\r\n                Email\r\n              </label>\r\n              <input\r\n                id=\"email\"\r\n                name=\"email\"\r\n                type=\"email\"\r\n                required\r\n                value={formData.email}\r\n                onChange={(e) => setFormData({ ...formData, email: e.target.value })}\r\n                className=\"mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm\"\r\n                disabled={loading}\r\n              />\r\n            </div>\r\n            <div>\r\n              <label htmlFor=\"password\" className=\"block text-sm font-medium text-gray-700\">\r\n                Password\r\n              </label>\r\n              <input\r\n                id=\"password\"\r\n                name=\"password\"\r\n                type=\"password\"\r\n                required\r\n                value={formData.password}\r\n                onChange={(e) => setFormData({ ...formData, password: e.target.value })}\r\n                className=\"mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm\"\r\n                disabled={loading}\r\n              />\r\n            </div>\r\n          </div>\r\n\r\n          {error && (\r\n            <div className=\"text-red-500 text-sm text-center\">\r\n              {error}\r\n            </div>\r\n          )}\r\n\r\n          <div>\r\n            <Button\r\n              type=\"submit\"\r\n              className=\"w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500\"\r\n              disabled={loading}\r\n            >\r\n              {loading ? 'Signing in...' : 'Sign in'}\r\n            </Button>\r\n          </div>\r\n        </form>\r\n\r\n        <div className=\"text-center\">\r\n          <Link\r\n            href=\"/auth/signup\"\r\n            className=\"text-indigo-600 hover:text-indigo-500\"\r\n          >\r\n            Don't have an account? Sign up\r\n          </Link>\r\n        </div>\r\n      </div>\r\n    </div>\r\n  )\r\n}
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/components/auth/SignInForm.tsx b/src/components/auth/SignInForm.tsx
+--- a/src/components/auth/SignInForm.tsx	(revision cfa58eee53e181a3aa71bcf01468a286c132dc69)
++++ b/src/components/auth/SignInForm.tsx	(date 1741495082449)
+@@ -6,6 +6,7 @@
+ import { useRouter } from 'next/navigation'
+ import Link from 'next/link'
+ import toast from 'react-hot-toast'
++import Image from 'next/image'
+ 
+ export default function SignInForm() {
+   const router = useRouter()
+@@ -74,7 +75,7 @@
+ 
+       // Get the current session
+       const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+-      
++
+       if (sessionError) {
+         console.error('Session error:', sessionError)
+         throw new Error('Failed to establish session')
+@@ -86,7 +87,7 @@
+       }
+ 
+       console.log('Session established:', session)
+-      
++
+       // Set auth cookie
+       const response = await fetch('/api/auth/session', {
+         method: 'POST',
+@@ -102,7 +103,7 @@
+ 
+       console.log('Session cookie set, redirecting...')
+       toast.success('Signed in successfully')
+-      
++
+       // Update redirect path based on user role
+       if (profile.role === 'student') {
+         window.location.href = '/student-dashboard'
+@@ -121,8 +122,15 @@
+   return (
+     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+       <div className="max-w-md w-full space-y-8">
+-        <div>
+-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
++        <div className="flex flex-col items-center">
++          <Image
++            src="/CTU.svg"
++            alt="ClassTeamUp Logo"
++            width={80}
++            height={80}
++            className="mb-4"
++          />
++          <h2 className="text-center text-3xl font-extrabold text-gray-900">
+             Sign in to ClassTeamUp
+           </h2>
+         </div>
+@@ -157,6 +165,14 @@
+                 className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                 disabled={loading}
+               />
++              <div className="mt-2 text-right">
++                <Link
++                  href="/forgot-password"
++                  className="text-sm text-indigo-600 hover:text-indigo-500"
++                >
++                  Forgot your password?
++                </Link>
++              </div>
+             </div>
+           </div>
+ 
+@@ -179,7 +195,7 @@
+ 
+         <div className="text-center">
+           <Link
+-            href="/auth/signup"
++            href="/signup"
+             className="text-indigo-600 hover:text-indigo-500"
+           >
+             Don't have an account? Sign up
+Index: public/site.webmanifest
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/public/site.webmanifest b/public/site.webmanifest
+new file mode 100644
+--- /dev/null	(date 1741373762039)
++++ b/public/site.webmanifest	(date 1741373762039)
+@@ -0,0 +1,1 @@
++{"name":"","short_name":"","icons":[{"src":"/android-chrome-192x192.png","sizes":"192x192","type":"image/png"},{"src":"/android-chrome-512x512.png","sizes":"512x512","type":"image/png"}],"theme_color":"#ffffff","background_color":"#ffffff","display":"standalone"}
+\ No newline at end of file
