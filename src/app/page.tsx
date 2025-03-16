@@ -89,7 +89,7 @@ export default function HomePage() {
         </div>
         <div className="absolute right-0 top-1/2 transform -translate-y-1/2 w-1/3 hidden lg:block">
           <Image 
-            src="/students-collaborating.svg"
+            src="/students-collaborating.jpg"
             alt="Students collaborating"
             width={500}
             height={500}

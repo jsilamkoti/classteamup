@@ -967,7 +967,7 @@ export default function TeamFormationPage() {
           </div>
           <Button
             onClick={handleFormTeams}
-            variant="action"
+            variant="primary"
             disabled={!validation.isValid || loading || availableStudents < formationRule.min_team_size}
           >
             {loading ? (
