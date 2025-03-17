@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card } from '@/components/ui/Card'
 import { UserPlus } from 'lucide-react'
 import Button from '@/components/ui/Button'
@@ -19,6 +19,11 @@ export default function TeamAvailabilityCard({
   const [lookingForTeam, setLookingForTeam] = useState(initialLookingForTeam)
   const [isUpdating, setIsUpdating] = useState(false)
   const supabase = createClientComponentClient()
+  
+  // Update local state when props change (e.g. when returning to the page)
+  useEffect(() => {
+    setLookingForTeam(initialLookingForTeam)
+  }, [initialLookingForTeam])
 
   const handleToggleAvailability = async () => {
     if (!isProfileComplete) {

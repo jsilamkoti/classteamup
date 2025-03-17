@@ -17,70 +17,73 @@ export default function StudentDashboardPage() {
   const [teamInfo, setTeamInfo] = useState<any>(null)
   const [teamMembers, setTeamMembers] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [completionPercentage, setCompletionPercentage] = useState(0)
   const supabase = createClientComponentClient()
 
   useEffect(() => {
-    async function loadData() {
+    async function fetchUserData() {
+      setLoading(true)
       try {
-        setLoading(true)
-        
-        // Get current user
-        const { data: { session } } = await supabase.auth.getSession()
-        if (!session) return
-        
-        // Fetch user profile
-        const { data: userProfile } = await supabase
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return
+
+        // Fetch profile data
+        const { data: profileData, error: profileError } = await supabase
           .from('users')
           .select('*')
-          .eq('id', session.user.id)
+          .eq('id', user.id)
           .single()
-        
-        if (userProfile) {
-          setProfile(userProfile)
-          
-          // Fetch user skills
-          const { data: userSkills } = await supabase
-            .from('student_skills')
-            .select('skill_id, proficiency_level')
-            .eq('user_id', session.user.id)
-          
-          setSkills(userSkills || [])
-          
-          // Fetch team if user is in one
-          if (userProfile.team_id) {
-            const { data: team } = await supabase
-              .from('teams')
-              .select('*')
-              .eq('id', userProfile.team_id)
-              .single()
-            
-            setTeamInfo(team)
 
-            // Fetch team members
-            if (team) {
-              const { data: members } = await supabase
-                .from('users')
-                .select(`
-                  id,
-                  full_name,
-                  email,
-                  student_skills (skill_id, proficiency_level)
-                `)
-                .in('id', team.members || [])
-              
-              setTeamMembers(members || [])
-            }
-          }
+        if (profileError) throw profileError
+        setProfile(profileData)
+
+        // Calculate profile completion
+        calculateProfileCompletion(profileData)
+
+        // Fetch team info
+        const { data: teamData, error: teamError } = await supabase
+          .from('team_members')
+          .select('team_id, teams(*)')
+          .eq('user_id', user.id)
+          .single()
+
+        if (teamData) {
+          setTeamInfo(teamData.teams)
         }
       } catch (error) {
-        console.error('Error loading data:', error)
+        console.error('Error fetching user data:', error)
       } finally {
         setLoading(false)
       }
     }
-    
-    loadData()
-  }, [])
+
+    fetchUserData()
+  }, [supabase])
+
+  // Calculate profile completion percentage
+  function calculateProfileCompletion(profile: any) {
+    if (!profile) {
+      setCompletionPercentage(0)
+      return
+    }
+
+    // Define required fields
+    const requiredFields = [
+      'full_name',
+      'email',
+      'bio',
+      // Add other required fields
+    ]
+
+    // Count completed fields
+    const completedFields = requiredFields.filter(field => 
+      profile[field] && profile[field].trim() !== ''
+    )
+
+    // Calculate percentage
+    const percentage = Math.round((completedFields.length / requiredFields.length) * 100)
+    setCompletionPercentage(percentage)
+  }
 
   // Define and check profile requirements
   const requirements = [
@@ -100,7 +103,6 @@ export default function StudentDashboardPage() {
 
   const completedRequirements = requirements.filter(req => req.met).length
   const totalRequirements = requirements.length
-  const completionPercentage = (completedRequirements / totalRequirements) * 100
 
   return (
     <div className="space-y-6">
@@ -135,7 +137,7 @@ export default function StudentDashboardPage() {
                   
                   {member.student_skills && member.student_skills.length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-1">
-                      {member.student_skills.map(skill => (
+                      {member.student_skills.map((skill: { skill_id: string; proficiency_level: string | number }) => (
                         <span 
                           key={`${member.id}-${skill.skill_id}`}
                           className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800"

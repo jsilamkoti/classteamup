@@ -134,6 +134,7 @@ export default function HomePage() {
         <div className="absolute right-0 top-1/2 transform -translate-y-1/2 w-1/3 hidden lg:block">
           <Image
             src={isDarkMode ? '/dark final student discussion img.png' : '/final student discussion img.png'} //Dynamic student image.
+          <Image
             alt="Students collaborating"
             width={500}
             height={500}
