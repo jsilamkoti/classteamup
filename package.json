@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "NODE_OPTIONS='--no-deprecation' next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "jest",
+    "test:watch": "jest --watch"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.0",
